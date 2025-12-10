@@ -2,30 +2,21 @@ import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../constants.dart';
 
-class ReceiptSide extends StatelessWidget {
-  // Dữ liệu
-  final List<Map<String, dynamic>> importItems;
-  final List<String> suppliers;
-  final String selectedSupplier;
+class ExportReceiptSide extends StatelessWidget {
+  final List<Map<String, dynamic>> exportItems;
   final int? selectedIndex;
   final double totalAmount;
-
-  // Callbacks
-  final Function(String?) onSupplierChanged;
   final Function(int) onSelectRow;
   final VoidCallback onRemove;
   final VoidCallback onEditQty;
   final VoidCallback onExportExcel;
   final VoidCallback onSubmit;
 
-  const ReceiptSide({
+  const ExportReceiptSide({
     super.key,
-    required this.importItems,
-    required this.suppliers,
-    required this.selectedSupplier,
+    required this.exportItems,
     required this.selectedIndex,
     required this.totalAmount,
-    required this.onSupplierChanged,
     required this.onSelectRow,
     required this.onRemove,
     required this.onEditQty,
@@ -41,53 +32,19 @@ class ReceiptSide extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // THÔNG TIN PHIẾU
+          // THÔNG TIN PHIẾU (Chỉ có Mã phiếu & Người tạo)
           _buildInfoRow(
             "Mã phiếu",
-            "PN${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
-            isReadOnly: true,
+            "PX${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
           ),
           const SizedBox(height: 10),
-
-          // Dropdown Nhà cung cấp
-          Row(
-            children: [
-              const SizedBox(
-                width: 100,
-                child: Text(
-                  "Nhà cung cấp",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: selectedSupplier,
-                      isExpanded: true,
-                      items: suppliers
-                          .map(
-                            (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
-                          .toList(),
-                      onChanged: onSupplierChanged,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildInfoRow("Người tạo", "Admin", isReadOnly: true),
+          _buildInfoRow(
+            "Người tạo",
+            "Admin",
+          ), // Có thể thay bằng tên nhân viên đăng nhập
           const SizedBox(height: 20),
 
-          // --- BẢNG CHI TIẾT (ĐÃ SỬA LỖI NHỎ & OVERFLOW) ---
+          // BẢNG CHI TIẾT PHIẾU XUẤT
           Expanded(
             child: Container(
               width: double.infinity,
@@ -95,39 +52,31 @@ class ReceiptSide extends StatelessWidget {
                 border: Border.all(color: Colors.grey.shade400),
               ),
               child: LayoutBuilder(
-                // 1. Lấy kích thước khung chứa
                 builder: (context, constraints) {
                   return SingleChildScrollView(
                     scrollDirection: Axis.vertical,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: ConstrainedBox(
-                        // 2. Ép chiều rộng tối thiểu bằng chiều rộng khung chứa
                         constraints: BoxConstraints(
                           minWidth: constraints.maxWidth,
                         ),
                         child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
+                          headingRowColor: MaterialStateProperty.all(
                             Colors.grey[200],
                           ),
                           showCheckboxColumn: false,
                           columnSpacing: 20,
-                          // Kéo giãn các cột
                           columns: const [
                             DataColumn(label: Text("STT")),
                             DataColumn(label: Text("Mã máy")),
-                            DataColumn(
-                              label: Text("Tên máy"),
-                            ), // Bỏ giới hạn độ rộng để tự giãn
-                            DataColumn(label: Text("Số lượng"), numeric: true),
-                            DataColumn(label: Text("Đơn giá"), numeric: true),
-                            DataColumn(
-                              label: Text("Thành tiền"),
-                              numeric: true,
-                            ),
+                            DataColumn(label: Text("Tên máy")),
+                            DataColumn(label: Text("Số lượng")),
+                            DataColumn(label: Text("Đơn giá")),
+                            DataColumn(label: Text("Thành tiền")),
                           ],
-                          rows: List.generate(importItems.length, (index) {
-                            final item = importItems[index];
+                          rows: List.generate(exportItems.length, (index) {
+                            final item = exportItems[index];
                             final product = item['product'] as Product;
                             final isSelected = index == selectedIndex;
                             final total =
@@ -137,7 +86,7 @@ class ReceiptSide extends StatelessWidget {
                             return DataRow(
                               selected: isSelected,
                               onSelectChanged: (_) => onSelectRow(index),
-                              color: WidgetStateProperty.resolveWith<Color?>(
+                              color: MaterialStateProperty.resolveWith<Color?>(
                                 (states) => isSelected
                                     ? Colors.blue.withOpacity(0.1)
                                     : null,
@@ -145,7 +94,6 @@ class ReceiptSide extends StatelessWidget {
                               cells: [
                                 DataCell(Text("${index + 1}")),
                                 DataCell(Text(product.id)),
-                                // Cho phép tên hiển thị dài thoải mái
                                 DataCell(Text(product.name)),
                                 DataCell(Text("${item['quantity']}")),
                                 DataCell(Text("${item['price']}")),
@@ -161,22 +109,21 @@ class ReceiptSide extends StatelessWidget {
               ),
             ),
           ),
-
-          // ----------------------------------------------------
           const SizedBox(height: 15),
 
-          // CÁC NÚT CHỨC NĂNG
+          // NÚT CHỨC NĂNG
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment:
+                MainAxisAlignment.center, // Căn giữa giống hình mẫu
             children: [
               _buildActionButton(
-                "Xuất Excel",
+                "Xuất excel",
                 Icons.file_download,
                 Colors.green,
                 onExportExcel,
                 isOutlined: true,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 20),
               _buildActionButton(
                 "Sửa số lượng",
                 Icons.edit,
@@ -184,24 +131,24 @@ class ReceiptSide extends StatelessWidget {
                 onEditQty,
                 isOutlined: true,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 20),
               _buildActionButton(
                 "Xóa",
                 Icons.delete,
                 Colors.red,
                 onRemove,
-                isOutlined: false,
+                isOutlined: true,
               ),
             ],
           ),
 
           const Divider(height: 30, thickness: 2),
 
-          // TỔNG TIỀN & NÚT NHẬP HÀNG
+          // TỔNG TIỀN & NÚT XUẤT HÀNG
           Row(
             children: [
               const Text(
-                "TỔNG TIỀN:",
+                "TỔNG:",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -210,6 +157,7 @@ class ReceiptSide extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Container(
+                width: 150,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 5,
@@ -219,7 +167,7 @@ class ReceiptSide extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  "${totalAmount.toStringAsFixed(0)} VNĐ",
+                  "${totalAmount.toStringAsFixed(0)}", // Hiển thị số tiền
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -229,7 +177,7 @@ class ReceiptSide extends StatelessWidget {
               const Spacer(),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: Colors.cyan, // Màu nút Xuất Hàng (Cyan)
                   padding: const EdgeInsets.symmetric(
                     horizontal: 40,
                     vertical: 20,
@@ -237,7 +185,7 @@ class ReceiptSide extends StatelessWidget {
                 ),
                 onPressed: onSubmit,
                 child: const Text(
-                  "NHẬP HÀNG",
+                  "Xuất hàng",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -252,8 +200,7 @@ class ReceiptSide extends StatelessWidget {
     );
   }
 
-  // Helper Widgets
-  Widget _buildInfoRow(String label, String value, {bool isReadOnly = false}) {
+  Widget _buildInfoRow(String label, String value) {
     return Row(
       children: [
         SizedBox(
@@ -269,9 +216,9 @@ class ReceiptSide extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: isReadOnly ? Colors.grey[200] : Colors.white,
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.grey[200],
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(2),
             ),
             child: Text(value),
           ),
@@ -287,26 +234,21 @@ class ReceiptSide extends StatelessWidget {
     VoidCallback onTap, {
     bool isOutlined = false,
   }) {
-    if (isOutlined) {
-      return ElevatedButton.icon(
-        icon: Icon(icon, color: color),
-        label: Text(label, style: const TextStyle(color: Colors.black)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: BorderSide(
-            color: color == Colors.black54 ? Colors.grey : color,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-        ),
-        onPressed: onTap,
-      );
-    }
+    // Style cho nút viền (như hình mẫu)
     return ElevatedButton.icon(
-      icon: Icon(icon, color: Colors.white),
-      label: Text(label, style: const TextStyle(color: Colors.white)),
+      icon: Icon(icon, color: isOutlined ? color : Colors.white),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isOutlined ? Colors.black : Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+        backgroundColor: isOutlined ? Colors.white : color,
+        side: isOutlined ? BorderSide(color: Colors.black54) : null,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        elevation: 2,
       ),
       onPressed: onTap,
     );

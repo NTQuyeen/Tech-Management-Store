@@ -6,6 +6,10 @@ import '../components/top_header.dart';
 import 'product_manager_screen.dart';
 // 2. Import màn hình Nhập hàng (VỪA MỚI TÁCH XONG)
 import './import_goods/import_goods_screen.dart';
+import './export_goods/export_goods_screen.dart';
+import './employee/employee_manager_screen.dart';
+import './revenue/components/revenue_screen.dart';
+import './warehouse/components/warehouse_screen.dart';
 
 class TechStoreScreen extends StatefulWidget {
   const TechStoreScreen({super.key});
@@ -57,35 +61,35 @@ class _TechStoreScreenState extends State<TechStoreScreen> {
       case 1:
         return const ImportGoodsScreen();
       case 2:
-        return _buildPlaceholder("Giao diện Xuất Hàng");
+        return const ExportGoodsScreen();
       case 3:
-        return _buildPlaceholder("Quản lý Nhân viên");
+        return const EmployeeManagerScreen();
       case 4:
-        return _buildPlaceholder("Báo cáo Doanh thu");
+        return const RevenueScreen();
       case 5:
-        return _buildPlaceholder("Quản lý Kho hàng");
+        return const WarehouseScreen();
       default:
         return const Center(child: Text("Coming Soon"));
     }
   }
 
-  Widget _buildPlaceholder(String title) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.construction, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 20),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 24,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildPlaceholder(String title) {
+  //   return Center(
+  //     child: Column(
+  //       mainAxisAlignment: MainAxisAlignment.center,
+  //       children: [
+  //         Icon(Icons.construction, size: 80, color: Colors.grey[300]),
+  //         const SizedBox(height: 20),
+  //         Text(
+  //           title,
+  //           style: TextStyle(
+  //             fontSize: 24,
+  //             color: Colors.grey[600],
+  //             fontWeight: FontWeight.bold,
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 }
