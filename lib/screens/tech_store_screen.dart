@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../components/sidebar_menu.dart';
 import '../components/top_header.dart';
-// Import màn hình quản lý sản phẩm vừa tách
+
+// Import màn hình chức năng
 import 'product_manager_screen.dart';
-// 2. Import màn hình Nhập hàng (VỪA MỚI TÁCH XONG)
-import './import_goods/import_goods_screen.dart';
+// ĐÃ XÓA IMPORT MÀN HÌNH NHẬP HÀNG
 import './export_goods/export_goods_screen.dart';
 import './employee/employee_manager_screen.dart';
 import './revenue/components/revenue_screen.dart';
 import './warehouse/components/warehouse_screen.dart';
 
 class TechStoreScreen extends StatefulWidget {
-  const TechStoreScreen({super.key});
+  final String userRole;
+  final String userName;
+
+  const TechStoreScreen({
+    super.key,
+    required this.userRole,
+    required this.userName,
+  });
 
   @override
   State<TechStoreScreen> createState() => _TechStoreScreenState();
@@ -27,24 +34,25 @@ class _TechStoreScreenState extends State<TechStoreScreen> {
       backgroundColor: AppColors.background,
       body: Row(
         children: [
-          // 1. SIDEBAR
+          // SIDEBAR
           SidebarMenu(
+            userRole: widget.userRole,
             selectedIndex: _currentMenuIndex,
             onItemSelected: (index) {
               setState(() => _currentMenuIndex = index);
             },
           ),
 
-          // 2. MAIN CONTENT AREA
+          // MAIN CONTENT
           Expanded(
             child: Column(
               children: [
-                const TopHeader(
-                  employeeName: "Nguyễn Thiện Quyền",
-                  role: "Quản lý",
+                TopHeader(
+                  employeeName: widget.userName,
+                  role: widget.userRole == 'admin'
+                      ? "Quản trị viên"
+                      : "Nhân viên",
                 ),
-
-                // Nội dung thay đổi theo Menu
                 Expanded(child: _buildBody()),
               ],
             ),
@@ -54,42 +62,28 @@ class _TechStoreScreenState extends State<TechStoreScreen> {
     );
   }
 
+  // Hàm điều hướng (Đã cập nhật lại Index)
   Widget _buildBody() {
     switch (_currentMenuIndex) {
       case 0:
-        return const ProductManagerScreen(); // Gọi màn hình đã tách
-      case 1:
-        return const ImportGoodsScreen();
-      case 2:
+        return ProductManagerScreen(userRole: widget.userRole);
+
+      // Case 1 cũ là Nhập hàng -> Đã xóa
+
+      case 1: // Cũ là 2
         return const ExportGoodsScreen();
-      case 3:
+
+      case 2: // Cũ là 3
         return const EmployeeManagerScreen();
-      case 4:
+
+      case 3: // Cũ là 4
         return const RevenueScreen();
-      case 5:
+
+      case 4: // Cũ là 5
         return const WarehouseScreen();
+
       default:
-        return const Center(child: Text("Coming Soon"));
+        return const Center(child: Text("Chức năng đang phát triển"));
     }
   }
-
-  // Widget _buildPlaceholder(String title) {
-  //   return Center(
-  //     child: Column(
-  //       mainAxisAlignment: MainAxisAlignment.center,
-  //       children: [
-  //         Icon(Icons.construction, size: 80, color: Colors.grey[300]),
-  //         const SizedBox(height: 20),
-  //         Text(
-  //           title,
-  //           style: TextStyle(
-  //             fontSize: 24,
-  //             color: Colors.grey[600],
-  //             fontWeight: FontWeight.bold,
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 }

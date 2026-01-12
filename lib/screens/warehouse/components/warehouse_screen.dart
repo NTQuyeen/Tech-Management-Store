@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '/../../models/product.dart';
 import '../../../constants.dart';
+import '../../../services/warehouse_api.dart';
 
 // Import các components
 import 'warehouse_stat_card.dart';
@@ -19,61 +20,51 @@ class _WarehouseScreenState extends State<WarehouseScreen>
   late TabController _tabController;
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // Dữ liệu kho (Lấy từ Product Manager hoặc Mockup)
-  final List<Product> _products = [
-    Product(
-      id: 'IP001',
-      name: 'iPhone 15 Pro Max',
-      category: 'Điện thoại',
-      quantity: 20,
-      price: 31000000,
-      status: 'Còn hàng',
-      brand: 'Apple',
-    ),
-    Product(
-      id: 'LP002',
-      name: 'Macbook Air M1',
-      category: 'Laptop',
-      quantity: 8,
-      price: 18000000,
-      status: 'Sắp hết',
-      brand: 'Apple',
-    ),
-    Product(
-      id: 'SS003',
-      name: 'Samsung Galaxy S24',
-      category: 'Điện thoại',
-      quantity: 15,
-      price: 22000000,
-      status: 'Còn hàng',
-      brand: 'Samsung',
-    ),
-    Product(
-      id: 'MS004',
-      name: 'Chuột Logitech G102',
-      category: 'Phụ kiện',
-      quantity: 150,
-      price: 400000,
-      status: 'Còn hàng',
-      brand: 'Logitech',
-    ),
-    Product(
-      id: 'DE005',
-      name: 'Dell XPS 13',
-      category: 'Laptop',
-      quantity: 3,
-      price: 35000000,
-      status: 'Sắp hết',
-      brand: 'Dell',
-    ),
-  ];
+  List<Product> _products = [];
   List<Product> _filteredProducts = [];
+
+  final WarehouseApi _warehouseApi = WarehouseApi();
+  bool _isLoadingInventory = false;
+  bool _isLoadingHistory = false;
+  List<Map<String, dynamic>> _history = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _filteredProducts = List.from(_products);
+    _loadInventory();
+    _loadHistory();
+  }
+
+  Future<void> _loadInventory() async {
+    if (_isLoadingInventory) return;
+    setState(() => _isLoadingInventory = true);
+
+    try {
+      final items = await _warehouseApi.getInventory();
+      setState(() {
+        _products = items;
+        _filteredProducts = List.from(items);
+      });
+    } catch (e) {
+      _showError('Không tải được tồn kho: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingInventory = false);
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    if (_isLoadingHistory) return;
+    setState(() => _isLoadingHistory = true);
+
+    try {
+      final items = await _warehouseApi.getStockHistory();
+      setState(() => _history = items);
+    } catch (e) {
+      _showError('Không tải được lịch sử nhập/xuất: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
   }
 
   void _handleSearch(String value) {
@@ -188,7 +179,10 @@ class _WarehouseScreenState extends State<WarehouseScreen>
                 ),
                 const SizedBox(width: 10),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    _loadInventory();
+                    _loadHistory();
+                  },
                   icon: const Icon(Icons.print, color: Colors.grey),
                   tooltip: "In báo cáo",
                 ),
@@ -208,15 +202,23 @@ class _WarehouseScreenState extends State<WarehouseScreen>
               controller: _tabController,
               children: [
                 // Tab 1: Bảng tồn kho
-                InventoryTable(products: _filteredProducts),
+                _isLoadingInventory
+                    ? const Center(child: CircularProgressIndicator())
+                    : InventoryTable(products: _filteredProducts),
 
                 // Tab 2: Lịch sử
-                StockHistory(),
+                _isLoadingHistory
+                    ? const Center(child: CircularProgressIndicator())
+                    : StockHistory(history: _history),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }

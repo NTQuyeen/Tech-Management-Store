@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/employee.dart';
-import '../../constants.dart';
-// Import Dialog vừa tạo
 import 'employee_form_dialog.dart';
+import '../../services/employee_api.dart';
 
 class EmployeeManagerScreen extends StatefulWidget {
   const EmployeeManagerScreen({super.key});
@@ -12,56 +11,50 @@ class EmployeeManagerScreen extends StatefulWidget {
 }
 
 class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
-  // Dữ liệu mẫu
-  final List<Employee> _employees = [
-    Employee(
-      id: '1',
-      username: 'admin',
-      fullName: 'Nguyễn Thiện Quyền',
-      email: 'thienquyenking@gmail.com',
-      password: '123',
-      role: 'QUANLY',
-    ),
-    Employee(
-      id: '2',
-      username: 'nhanvien1',
-      fullName: 'Lê Quốc Huy',
-      email: 'huy@gmail.com',
-      password: '123',
-      role: 'NHANVIEN',
-    ),
-    Employee(
-      id: '3',
-      username: 'nhanvien2',
-      fullName: 'Nguyễn Quang Trường',
-      email: 'truong@gmail.com',
-      password: '123',
-      role: 'NHANVIEN',
-    ),
-  ];
+  List<Employee> _employees = [];
   List<Employee> _filteredEmployees = [];
 
   final _searchCtrl = TextEditingController();
   int? _selectedIndex;
-  String _filterStatus = 'Hoạt động';
+
+  final EmployeeApi _employeeApi = EmployeeApi();
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _filteredEmployees = List.from(_employees);
+    _loadEmployees();
   }
 
-  // --- LOGIC ---
+  Future<void> _loadEmployees() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final items = await _employeeApi.list();
+      setState(() {
+        _employees = items;
+        _filteredEmployees = List.from(items);
+        _selectedIndex = null;
+      });
+    } catch (e) {
+      _showError('Không tải được danh sách nhân viên: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _handleSearch(String value) {
     setState(() {
       if (value.isEmpty) {
         _filteredEmployees = List.from(_employees);
       } else {
+        final q = value.toLowerCase();
         _filteredEmployees = _employees
             .where(
               (e) =>
-                  e.fullName.toLowerCase().contains(value.toLowerCase()) ||
-                  e.username.toLowerCase().contains(value.toLowerCase()),
+                  e.fullName.toLowerCase().contains(q) ||
+                  e.username.toLowerCase().contains(q),
             )
             .toList();
       }
@@ -73,11 +66,13 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
     showDialog(
       context: context,
       builder: (_) => EmployeeFormDialog(
-        onSave: (newEmployee) {
-          setState(() {
-            _employees.add(newEmployee);
-            _handleSearch(_searchCtrl.text);
-          });
+        onSave: (newEmployee) async {
+          try {
+            await _employeeApi.create(newEmployee);
+            await _loadEmployees();
+          } catch (e) {
+            _showError('Thêm nhân viên thất bại: $e');
+          }
         },
       ),
     );
@@ -89,16 +84,13 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
       context: context,
       builder: (_) => EmployeeFormDialog(
         employee: _filteredEmployees[_selectedIndex!],
-        onSave: (updatedEmployee) {
-          setState(() {
-            // Logic cập nhật (trong thực tế sẽ update DB)
-            int index = _employees.indexWhere(
-              (e) => e.id == updatedEmployee.id,
-            );
-            if (index != -1) _employees[index] = updatedEmployee;
-            _handleSearch(_searchCtrl.text);
-            _selectedIndex = null;
-          });
+        onSave: (updatedEmployee) async {
+          try {
+            await _employeeApi.update(updatedEmployee);
+            await _loadEmployees();
+          } catch (e) {
+            _showError('Cập nhật nhân viên thất bại: $e');
+          }
         },
       ),
     );
@@ -118,13 +110,19 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              setState(() {
-                _employees.remove(_filteredEmployees[_selectedIndex!]);
-                _handleSearch(_searchCtrl.text);
-                _selectedIndex = null;
-              });
-              Navigator.pop(ctx);
+            onPressed: () async {
+              final emp = _filteredEmployees[_selectedIndex!];
+              try {
+                // ✅ FIX: id phải là số (int)
+                if (emp.id == null) {
+                  throw Exception('Nhân viên không có id hợp lệ để xóa');
+                }
+                await _employeeApi.deleteById(emp.id!);
+                await _loadEmployees();
+              } catch (e) {
+                _showError('Xóa nhân viên thất bại: $e');
+              }
+              if (context.mounted) Navigator.pop(ctx);
             },
             child: const Text("Xóa", style: TextStyle(color: Colors.white)),
           ),
@@ -137,7 +135,6 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // --- TOOLBAR ---
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
           decoration: BoxDecoration(
@@ -145,10 +142,8 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
             border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
           ),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start, // Căn trên để khớp layout
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // NHÓM CHỨC NĂNG (TRÁI)
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -187,10 +182,7 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
                   ],
                 ),
               ),
-
               const Spacer(),
-
-              // NHÓM TÌM KIẾM (PHẢI)
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -210,67 +202,33 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            // Dropdown trạng thái
-                            Container(
-                              height: 35,
-                              padding: const EdgeInsets.symmetric(
+                        SizedBox(
+                          width: 260,
+                          height: 35,
+                          child: TextField(
+                            controller: _searchCtrl,
+                            onChanged: _handleSearch,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
                                 horizontal: 10,
                               ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                color: Colors.grey[100],
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _filterStatus,
-                                  items: ['Hoạt động', 'Đã khóa']
-                                      .map(
-                                        (e) => DropdownMenuItem(
-                                          value: e,
-                                          child: Text(e),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (val) =>
-                                      setState(() => _filterStatus = val!),
-                                ),
-                              ),
+                              filled: true,
+                              fillColor: Colors.white,
                             ),
-                            const SizedBox(width: 5),
-                            // Ô nhập
-                            SizedBox(
-                              width: 200,
-                              height: 35,
-                              child: TextField(
-                                controller: _searchCtrl,
-                                onChanged: _handleSearch,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(width: 10),
-                    // Nút Refresh
                     Column(
                       children: [
-                        const SizedBox(
-                          height: 18,
-                        ), // Để căn icon xuống dưới chữ "Tìm kiếm"
+                        const SizedBox(height: 18),
                         IconButton(
                           onPressed: () {
                             _searchCtrl.clear();
                             _handleSearch('');
+                            _loadEmployees();
                           },
                           icon: const Icon(
                             Icons.refresh,
@@ -288,8 +246,6 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
             ],
           ),
         ),
-
-        // --- BẢNG DỮ LIỆU ---
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(10),
@@ -299,70 +255,79 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
                 border: Border.all(color: Colors.grey.shade400),
                 color: Colors.white,
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[200]),
-                  showCheckboxColumn: false,
-                  columns: const [
-                    DataColumn(
-                      label: Text(
-                        "STT",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: DataTable(
+                        headingRowColor: WidgetStateProperty.all(
+                          Colors.grey[200],
+                        ),
+                        showCheckboxColumn: false,
+                        columns: const [
+                          DataColumn(
+                            label: Text(
+                              "STT",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Tên Tài khoản",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Họ tên",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Email",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Vai trò",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                        rows: List.generate(_filteredEmployees.length, (index) {
+                          final e = _filteredEmployees[index];
+                          final isSelected = index == _selectedIndex;
+                          return DataRow(
+                            selected: isSelected,
+                            onSelectChanged: (_) =>
+                                setState(() => _selectedIndex = index),
+                            color: MaterialStateProperty.resolveWith<Color?>(
+                              (states) => isSelected
+                                  ? Colors.blue.withOpacity(0.1)
+                                  : null,
+                            ),
+                            cells: [
+                              DataCell(Text("${index + 1}")),
+                              DataCell(Text(e.username)),
+                              DataCell(Text(e.fullName)),
+                              DataCell(Text(e.email)),
+                              DataCell(Text(e.role)),
+                            ],
+                          );
+                        }),
                       ),
                     ),
-                    DataColumn(
-                      label: Text(
-                        "Tên Tài khoản",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        "Họ tên",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        "Email",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        "Vai trò",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                  rows: List.generate(_filteredEmployees.length, (index) {
-                    final e = _filteredEmployees[index];
-                    final isSelected = index == _selectedIndex;
-                    return DataRow(
-                      selected: isSelected,
-                      onSelectChanged: (_) =>
-                          setState(() => _selectedIndex = index),
-                      color: MaterialStateProperty.resolveWith<Color?>(
-                        (states) =>
-                            isSelected ? Colors.blue.withOpacity(0.1) : null,
-                      ),
-                      cells: [
-                        DataCell(Text("${index + 1}")),
-                        DataCell(Text(e.username)),
-                        DataCell(Text(e.fullName)),
-                        DataCell(Text(e.email)),
-                        DataCell(Text(e.role)),
-                      ],
-                    );
-                  }),
-                ),
-              ),
             ),
           ),
         ),
       ],
     );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Widget _buildTopButton(
@@ -376,7 +341,6 @@ class _EmployeeManagerScreenState extends State<EmployeeManagerScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icon nằm trong hình vuông trắng, có bóng mờ
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(

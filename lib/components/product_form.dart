@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/label_input.dart'; // Đảm bảo import đúng file LabelInput
+import '../constants.dart'; // Để lấy màu AppColors.primary
 
 class ProductForm extends StatelessWidget {
   final TextEditingController nameCtrl;
@@ -7,7 +7,7 @@ class ProductForm extends StatelessWidget {
   final TextEditingController priceCtrl;
   final TextEditingController qtyCtrl;
 
-  // Các tham số cho Dropdown
+  // PHẦN DROPDOWN
   final List<String> categoryList;
   final String? selectedCategory;
   final ValueChanged<String?> onCategoryChanged;
@@ -28,49 +28,141 @@ class ProductForm extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 1. Tên sản phẩm
-        LabelInput(label: "Tên sản phẩm", controller: nameCtrl),
-
-        // 2. Mã sản phẩm
-        LabelInput(label: "Mã sản phẩm", controller: idCtrl),
-
-        // 3. Loại sản phẩm (ĐÃ SỬA: Dùng LabelInput bọc Dropdown)
-        LabelInput(
-          label: "Loại sản phẩm",
-          widget: Container(
-            // Tạo khung viền giống hệt TextField trong LabelInput
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(
-                color: Colors.black45,
-              ), // Màu viền xám đậm giống input
-              borderRadius: BorderRadius.circular(4),
+        // --- HÀNG 1: Tên sản phẩm & Mã SP ---
+        Row(
+          children: [
+            Expanded(
+              flex: 3, // Tên SP dài hơn chút
+              child: _buildRow("Tên sản phẩm", controller: nameCtrl),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.centerLeft,
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedCategory,
-                isExpanded: true, // Bung full chiều ngang
-                icon: const Icon(Icons.arrow_drop_down),
-                style: const TextStyle(fontSize: 14, color: Colors.black),
-                items: categoryList.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: onCategoryChanged,
+            const SizedBox(width: 20),
+            Expanded(flex: 2, child: _buildRow("Mã SP", controller: idCtrl)),
+          ],
+        ),
+        const SizedBox(height: 15),
+
+        // --- HÀNG 2: Loại sản phẩm & Số lượng ---
+        Row(
+          children: [
+            // Dropdown Loại sản phẩm
+            Expanded(
+              flex: 3,
+              child: _buildRow(
+                "Loại sản phẩm",
+                customWidget: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedCategory,
+                      isExpanded: true,
+                      hint: const Text("Chọn loại"),
+                      items: categoryList.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: onCategoryChanged,
+                    ),
+                  ),
+                ),
               ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              flex: 2,
+              child: _buildRow("Số lượng", controller: qtyCtrl, isNumber: true),
+            ),
+          ],
+        ),
+        const SizedBox(height: 15),
+
+        // --- HÀNG 3: Đơn giá & (Ô trống để cân đối) ---
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: _buildRow(
+                "Đơn giá",
+                controller: priceCtrl,
+                isNumber: true,
+              ),
+            ),
+            const SizedBox(width: 20),
+            // Spacer trống bên phải để giữ form thẳng hàng với flex ở trên
+            const Expanded(flex: 2, child: SizedBox()),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // --- HÀM TẠO DÒNG NHẬP LIỆU (Label Trái - Input Phải) ---
+  Widget _buildRow(
+    String label, {
+    TextEditingController? controller,
+    bool isNumber = false,
+    Widget? customWidget,
+  }) {
+    return Row(
+      children: [
+        // 1. PHẦN LABEL (MÀU XANH BÊN TRÁI)
+        Container(
+          width: 110, // Độ rộng cố định cho Label để thẳng hàng
+          height: 40, // Chiều cao cố định
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(
+              0xFF00695C,
+            ), // Màu xanh đậm giống hình mẫu (Teal)
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
             ),
           ),
         ),
+        const SizedBox(width: 10),
 
-        // 4. Số lượng
-        LabelInput(label: "Số lượng", controller: qtyCtrl, isNumber: true),
-
-        // 5. Đơn giá
-        LabelInput(label: "Đơn giá", controller: priceCtrl, isNumber: true),
+        // 2. PHẦN INPUT (MÀU TRẮNG BÊN PHẢI)
+        Expanded(
+          child:
+              customWidget ??
+              SizedBox(
+                // Nếu có widget riêng (Dropdown) thì dùng, ko thì dùng TextField
+                height: 40, // Chiều cao khớp với label
+                child: TextField(
+                  controller: controller,
+                  keyboardType: isNumber
+                      ? TextInputType.number
+                      : TextInputType.text,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 0,
+                    ),
+                    border: OutlineInputBorder(), // Viền xám
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                        color: AppColors.primary,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+        ),
       ],
     );
   }

@@ -1,256 +1,169 @@
 import 'package:flutter/material.dart';
-import '../../models/product.dart';
 import '../../constants.dart';
 
-class ExportReceiptSide extends StatelessWidget {
-  final List<Map<String, dynamic>> exportItems;
-  final int? selectedIndex;
-  final double totalAmount;
-  final Function(int) onSelectRow;
-  final VoidCallback onRemove;
-  final VoidCallback onEditQty;
-  final VoidCallback onExportExcel;
-  final VoidCallback onSubmit;
+class ExportReceiptSide extends StatefulWidget {
+  final TextEditingController nameCtrl;
+  final TextEditingController phoneCtrl;
+  final TextEditingController emailCtrl;
+  final VoidCallback onExport;
+  final VoidCallback onSearchCustomer;
 
   const ExportReceiptSide({
     super.key,
-    required this.exportItems,
-    required this.selectedIndex,
-    required this.totalAmount,
-    required this.onSelectRow,
-    required this.onRemove,
-    required this.onEditQty,
-    required this.onExportExcel,
-    required this.onSubmit,
+    required this.nameCtrl,
+    required this.phoneCtrl,
+    required this.emailCtrl,
+    required this.onExport,
+    required this.onSearchCustomer,
   });
+
+  @override
+  State<ExportReceiptSide> createState() => _ExportReceiptSideState();
+}
+
+class _ExportReceiptSideState extends State<ExportReceiptSide> {
+  bool get _canExport =>
+      widget.nameCtrl.text.trim().isNotEmpty &&
+      widget.phoneCtrl.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.nameCtrl.addListener(_refresh);
+    widget.phoneCtrl.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.nameCtrl.removeListener(_refresh);
+    widget.phoneCtrl.removeListener(_refresh);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(15),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // THÔNG TIN PHIẾU (Chỉ có Mã phiếu & Người tạo)
-          _buildInfoRow(
-            "Mã phiếu",
-            "PX${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
-          const SizedBox(height: 10),
-          _buildInfoRow(
-            "Người tạo",
-            "Admin",
-          ), // Có thể thay bằng tên nhân viên đăng nhập
-          const SizedBox(height: 20),
-
-          // BẢNG CHI TIẾT PHIẾU XUẤT
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // HEADER
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: constraints.maxWidth,
-                        ),
-                        child: DataTable(
-                          headingRowColor: MaterialStateProperty.all(
-                            Colors.grey[200],
-                          ),
-                          showCheckboxColumn: false,
-                          columnSpacing: 20,
-                          columns: const [
-                            DataColumn(label: Text("STT")),
-                            DataColumn(label: Text("Mã máy")),
-                            DataColumn(label: Text("Tên máy")),
-                            DataColumn(label: Text("Số lượng")),
-                            DataColumn(label: Text("Đơn giá")),
-                            DataColumn(label: Text("Thành tiền")),
-                          ],
-                          rows: List.generate(exportItems.length, (index) {
-                            final item = exportItems[index];
-                            final product = item['product'] as Product;
-                            final isSelected = index == selectedIndex;
-                            final total =
-                                (item['quantity'] as int) *
-                                (item['price'] as double);
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.person_outline, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text(
+                  "THÔNG TIN KHÁCH HÀNG",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-                            return DataRow(
-                              selected: isSelected,
-                              onSelectChanged: (_) => onSelectRow(index),
-                              color: MaterialStateProperty.resolveWith<Color?>(
-                                (states) => isSelected
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : null,
-                              ),
-                              cells: [
-                                DataCell(Text("${index + 1}")),
-                                DataCell(Text(product.id)),
-                                DataCell(Text(product.name)),
-                                DataCell(Text("${item['quantity']}")),
-                                DataCell(Text("${item['price']}")),
-                                DataCell(Text(total.toStringAsFixed(0))),
-                              ],
-                            );
-                          }),
+          // BODY
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                children: [
+                  _buildInput(
+                    "Số điện thoại",
+                    widget.phoneCtrl,
+                    Icons.phone,
+                    isNumber: true,
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.search, color: AppColors.primary),
+                      onPressed: widget.onSearchCustomer,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildInput(
+                    "Họ và Tên",
+                    widget.nameCtrl,
+                    Icons.account_circle,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildInput("Email", widget.emailCtrl, Icons.email),
+                  const Spacer(),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _canExport
+                            ? AppColors.primary
+                            : Colors.grey,
+                        padding: const EdgeInsets.symmetric(vertical: 22),
+                      ),
+                      onPressed: _canExport ? widget.onExport : null,
+                      child: const Text(
+                        "XUẤT HÓA ĐƠN",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 15),
-
-          // NÚT CHỨC NĂNG
-          Row(
-            mainAxisAlignment:
-                MainAxisAlignment.center, // Căn giữa giống hình mẫu
-            children: [
-              _buildActionButton(
-                "Xuất excel",
-                Icons.file_download,
-                Colors.green,
-                onExportExcel,
-                isOutlined: true,
-              ),
-              const SizedBox(width: 20),
-              _buildActionButton(
-                "Sửa số lượng",
-                Icons.edit,
-                Colors.black54,
-                onEditQty,
-                isOutlined: true,
-              ),
-              const SizedBox(width: 20),
-              _buildActionButton(
-                "Xóa",
-                Icons.delete,
-                Colors.red,
-                onRemove,
-                isOutlined: true,
-              ),
-            ],
-          ),
-
-          const Divider(height: 30, thickness: 2),
-
-          // TỔNG TIỀN & NÚT XUẤT HÀNG
-          Row(
-            children: [
-              const Text(
-                "TỔNG:",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 150,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  "${totalAmount.toStringAsFixed(0)}", // Hiển thị số tiền
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.cyan, // Màu nút Xuất Hàng (Cyan)
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 20,
-                  ),
-                ),
-                onPressed: onSubmit,
-                child: const Text(
-                  "Xuất hàng",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
+  Widget _buildInput(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    bool isNumber = false,
+    Widget? suffixIcon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            height: 40,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: Text(value),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          onSubmitted: isNumber ? (_) => widget.onSearchCustomer() : null,
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: AppColors.primary),
+            suffixIcon: suffixIcon,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildActionButton(
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap, {
-    bool isOutlined = false,
-  }) {
-    // Style cho nút viền (như hình mẫu)
-    return ElevatedButton.icon(
-      icon: Icon(icon, color: isOutlined ? color : Colors.white),
-      label: Text(
-        label,
-        style: TextStyle(
-          color: isOutlined ? Colors.black : Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isOutlined ? Colors.white : color,
-        side: isOutlined ? BorderSide(color: Colors.black54) : null,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        elevation: 2,
-      ),
-      onPressed: onTap,
     );
   }
 }

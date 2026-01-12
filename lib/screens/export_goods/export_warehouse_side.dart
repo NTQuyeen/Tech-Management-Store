@@ -1,164 +1,280 @@
 import 'package:flutter/material.dart';
-import '../../models/product.dart';
 import '../../constants.dart';
 
 class ExportWarehouseSide extends StatelessWidget {
-  final List<Product> products;
-  final TextEditingController searchCtrl;
-  final TextEditingController qtyCtrl;
-  final int? selectedIndex;
-  final Function(String) onSearch;
-  final Function(int) onSelectRow;
-  final VoidCallback onAdd;
+  // products: { id(INT), code(String), name, price(num), qty(int) }
+  final List<Map<String, dynamic>> products;
+
+  // Callbacks
+  final VoidCallback onAddProduct;
+  final Function(int index)? onEditProduct;
+  final Function(int index)? onRemoveProduct;
 
   const ExportWarehouseSide({
     super.key,
     required this.products,
-    required this.searchCtrl,
-    required this.qtyCtrl,
-    required this.selectedIndex,
-    required this.onSearch,
-    required this.onSelectRow,
-    required this.onAdd,
+    required this.onAddProduct,
+    this.onEditProduct,
+    this.onRemoveProduct,
   });
+
+  String _formatMoney(num value) {
+    final s = value.toStringAsFixed(0);
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return s.replaceAllMapped(reg, (m) => '${m[1]}.');
+  }
+
+  num get _totalAmount {
+    return products.fold<num>(
+      0,
+      (sum, p) => sum + ((p['price'] ?? 0) * (p['qty'] ?? 0)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
-      color: Colors.grey[100],
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            "DANH SÁCH SẢN PHẨM",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 10),
-
-          // TÌM KIẾM & LÀM MỚI
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: searchCtrl,
-                  onChanged: onSearch,
-                  decoration: const InputDecoration(
-                    hintText: "Tìm kiếm...",
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 5),
-              // Nút làm mới icon xoay
-              IconButton(
-                onPressed: () => onSearch(''),
-                icon: const Icon(Icons.refresh, color: Colors.blue),
-                tooltip: "Làm mới",
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // BẢNG DỮ LIỆU
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                color: Colors.white,
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: MaterialStateProperty.all(
-                      Colors.grey[200],
-                    ),
-                    showCheckboxColumn: false,
-                    columns: const [
-                      DataColumn(label: Text("STT")),
-                      DataColumn(label: Text("Mã máy")),
-                      DataColumn(label: Text("Tên máy")),
-                      DataColumn(label: Text("Số lượng")), // Tồn kho
-                      DataColumn(label: Text("Đơn giá")),
-                    ],
-                    rows: List.generate(products.length, (index) {
-                      final p = products[index];
-                      final isSelected = index == selectedIndex;
-                      return DataRow(
-                        selected: isSelected,
-                        onSelectChanged: (_) => onSelectRow(index),
-                        color: MaterialStateProperty.resolveWith<Color?>((
-                          states,
-                        ) {
-                          if (isSelected)
-                            return AppColors.primary.withOpacity(0.2);
-                          return null;
-                        }),
-                        cells: [
-                          DataCell(Text("${index + 1}")),
-                          DataCell(Text(p.id)),
-                          DataCell(Text(p.name)),
-                          DataCell(Text("${p.quantity}")),
-                          DataCell(Text("${p.price.toStringAsFixed(0)}")),
-                        ],
-                      );
-                    }),
-                  ),
-                ),
+          // ===== HEADER =====
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-
-          // KHU VỰC NHẬP SỐ LƯỢNG & THÊM
-          Container(
-            padding: const EdgeInsets.all(10),
-            color: Colors.white,
-            child: Row(
+            child: const Row(
               children: [
-                const Text(
-                  "Số lượng: ",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                SizedBox(
-                  width: 100,
-                  height: 40,
-                  child: TextField(
-                    controller: qtyCtrl,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                Icon(Icons.list_alt, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text(
+                  "DANH SÁCH SẢN PHẨM",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
                   ),
-                ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text(
-                    "Thêm",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 15,
-                    ),
-                  ),
-                  onPressed: onAdd,
                 ),
               ],
+            ),
+          ),
+
+          // ===== BODY =====
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                children: [
+                  // ===== TABLE =====
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: SingleChildScrollView(
+                          child: DataTable(
+                            headingRowColor: MaterialStateProperty.all(
+                              const Color(0xFFE0F2F1),
+                            ),
+                            columnSpacing: 20,
+                            columns: const [
+                              DataColumn(
+                                label: Text(
+                                  'Tên sản phẩm',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                numeric: true,
+                                label: Text(
+                                  'Đơn giá',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                numeric: true,
+                                label: Text(
+                                  'SL',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                numeric: true,
+                                label: Text(
+                                  'Thành tiền',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Thao tác',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            rows: products.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final product = entry.value;
+
+                              final price = (product['price'] ?? 0) as num;
+                              final qty = (product['qty'] ?? 0) as num;
+                              final total = price * qty;
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    Text(
+                                      (product['name'] ?? '').toString(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      _formatMoney(price),
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      '$qty',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      _formatMoney(total),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          tooltip: "Sửa",
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            size: 18,
+                                            color: Colors.orange,
+                                          ),
+                                          onPressed: onEditProduct == null
+                                              ? null
+                                              : () => onEditProduct!(index),
+                                        ),
+                                        IconButton(
+                                          tooltip: "Xóa",
+                                          icon: const Icon(
+                                            Icons.delete,
+                                            size: 18,
+                                            color: Colors.red,
+                                          ),
+                                          onPressed: onRemoveProduct == null
+                                              ? null
+                                              : () => onRemoveProduct!(index),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  // ===== TOTAL =====
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "TỔNG CỘNG",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        _formatMoney(_totalAmount),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  // ===== ADD BUTTON =====
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.add, size: 20),
+                      label: const Text("Thêm sản phẩm"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        elevation: 3,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 18,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: onAddProduct,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-// Nhớ dòng import này phải trúng tên file bạn đã tạo
-import 'screens/tech_store_screen.dart';
+import 'constants.dart'; // Để lấy màu chủ đạo AppColors
+import 'screens/login_screen.dart'; // Màn hình đầu tiên là Login
 
 void main() {
   runApp(const MyApp());
@@ -12,14 +12,43 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quản lý Cửa hàng',
-      debugShowCheckedModeBanner: false,
+      title: 'Phần mềm Quản lý Cửa hàng', // Tên hiển thị trên thanh taskbar
+      debugShowCheckedModeBanner: false, // Tắt chữ Debug ở góc phải
+      // Cấu hình giao diện (Theme)
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: false, // Để giữ giao diện vuông vức kiểu cũ
+        // Sử dụng Material 3 (Giao diện mới nhất của Google)
+        useMaterial3: true,
+
+        // Thiết lập màu chủ đạo cho toàn app dựa trên AppColors.primary
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          primary: AppColors.primary,
+        ),
+
+        // Cấu hình font chữ mặc định (Tùy chọn)
+        fontFamily: 'Roboto', // Hoặc font bạn thích
+        // Cấu hình style cho các nút bấm (ElevatedButton)
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+
+        // Cấu hình style cho ô nhập liệu (Input)
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          focusedBorder: const OutlineInputBorder(
+            borderSide: BorderSide(color: AppColors.primary, width: 2),
+          ),
+        ),
       ),
-      // Gọi màn hình chính chúng ta vừa làm xong
-      home: const TechStoreScreen(),
+
+      // MÀN HÌNH KHỞI CHẠY ĐẦU TIÊN
+      home: const LoginScreen(),
     );
   }
 }

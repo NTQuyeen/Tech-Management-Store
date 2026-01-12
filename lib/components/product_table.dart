@@ -29,6 +29,12 @@ class _ProductTableState extends State<ProductTable> {
     super.dispose();
   }
 
+  String _formatCurrency(double price) {
+    String priceStr = price.toInt().toString();
+    RegExp reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return priceStr.replaceAllMapped(reg, (Match m) => '${m[1]}.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -37,139 +43,140 @@ class _ProductTableState extends State<ProductTable> {
         border: Border.all(color: Colors.grey),
         color: Colors.white,
       ),
-      child: ScrollbarTheme(
-        data: ScrollbarThemeData(
-          thumbColor: MaterialStateProperty.all(
-            AppColors.primary.withOpacity(0.6),
-          ),
-          thickness: MaterialStateProperty.all(10),
-          radius: const Radius.circular(10),
-        ),
-        child: Scrollbar(
-          controller: _verticalScrollController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          child: SingleChildScrollView(
-            controller: _verticalScrollController,
-            scrollDirection: Axis.vertical,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ScrollbarTheme(
+            data: ScrollbarThemeData(
+              thumbColor: WidgetStateProperty.all(
+                AppColors.primary.withOpacity(0.6),
+              ),
+              thickness: WidgetStateProperty.all(10),
+              radius: const Radius.circular(10),
+            ),
             child: Scrollbar(
-              controller: _horizontalScrollController,
+              controller: _verticalScrollController,
               thumbVisibility: true,
               trackVisibility: true,
-              notificationPredicate: (notif) => notif.depth == 1,
               child: SingleChildScrollView(
-                controller: _horizontalScrollController,
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  showCheckboxColumn: false,
-                  headingRowColor: MaterialStateProperty.all(Colors.grey[300]),
-                  border: TableBorder.all(color: Colors.grey.shade300),
-
-                  // --- CÒN LẠI 8 CỘT (Đã xóa cột Hình ảnh) ---
-                  columns: const [
-                    DataColumn(
-                      label: Text(
-                        'STT',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                controller: _verticalScrollController,
+                child: Scrollbar(
+                  controller: _horizontalScrollController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  notificationPredicate: (notif) => notif.depth == 1,
+                  child: SingleChildScrollView(
+                    controller: _horizontalScrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: constraints.maxWidth,
                       ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Tên sản phẩm',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Mã SP',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Loại',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Số lượng',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Trạng thái',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Đơn giá',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'Thương hiệu',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-
-                  // --- CÒN LẠI 8 Ô (Đã xóa ô Hình ảnh) ---
-                  rows: widget.data.asMap().entries.map((entry) {
-                    int index = entry.key;
-                    Product product = entry.value;
-                    bool isSelected = index == widget.selectedIndex;
-
-                    TextStyle textStyle = TextStyle(
-                      color: isSelected ? Colors.white : Colors.black,
-                      fontSize: 14,
-                    );
-
-                    return DataRow(
-                      selected: isSelected,
-                      onSelectChanged: (_) => widget.onRowSelected(index),
-                      color: MaterialStateProperty.resolveWith<Color?>((
-                        states,
-                      ) {
-                        if (isSelected) return AppColors.primary;
-                        return index % 2 == 0 ? Colors.white : Colors.grey[100];
-                      }),
-                      cells: [
-                        DataCell(Text('${index + 1}', style: textStyle)),
-                        DataCell(Text(product.name, style: textStyle)),
-                        DataCell(Text(product.id, style: textStyle)),
-                        DataCell(Text(product.category, style: textStyle)),
-                        DataCell(Text('${product.quantity}', style: textStyle)),
-                        DataCell(
-                          Text(
-                            product.status,
-                            style: textStyle.copyWith(
-                              color: isSelected
-                                  ? Colors.white
-                                  : (product.status == 'Hết hàng'
-                                        ? Colors.red
-                                        : Colors.green),
+                      child: DataTable(
+                        showCheckboxColumn: false,
+                        headingRowColor: MaterialStateProperty.all(
+                          Colors.grey[300],
+                        ),
+                        border: TableBorder.all(color: Colors.grey.shade300),
+                        columnSpacing: 20,
+                        columns: const [
+                          DataColumn(
+                            label: Center(
+                              child: Text(
+                                'STT',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                        ),
-                        DataCell(
-                          Text(
-                            '${product.price.toStringAsFixed(0)}',
-                            style: textStyle,
+                          DataColumn(
+                            label: Text(
+                              'Tên sản phẩm',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                        DataCell(Text(product.brand, style: textStyle)),
-                      ],
-                    );
-                  }).toList(),
+                          DataColumn(
+                            label: Text(
+                              'Mã SP',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Loại',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            numeric: true,
+                            label: Text(
+                              'Số lượng',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            numeric: true,
+                            label: Text(
+                              'Đơn giá',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                        rows: widget.data.asMap().entries.map((entry) {
+                          int index = entry.key;
+                          Product product = entry.value;
+                          bool isSelected = index == widget.selectedIndex;
+
+                          TextStyle textStyle = TextStyle(
+                            color: isSelected ? Colors.white : Colors.black,
+                            fontSize: 14,
+                          );
+
+                          return DataRow(
+                            selected: isSelected,
+                            onSelectChanged: (_) => widget.onRowSelected(index),
+                            color: MaterialStateProperty.resolveWith<Color?>((
+                              _,
+                            ) {
+                              if (isSelected) return AppColors.primary;
+                              return index % 2 == 0
+                                  ? Colors.white
+                                  : Colors.grey[100];
+                            }),
+                            cells: [
+                              DataCell(
+                                Center(
+                                  child: Text('${index + 1}', style: textStyle),
+                                ),
+                              ),
+                              DataCell(Text(product.name, style: textStyle)),
+
+                              // ✅ MÃ SP ĐÚNG
+                              DataCell(
+                                Text(product.productCode, style: textStyle),
+                              ),
+
+                              DataCell(
+                                Text(product.category, style: textStyle),
+                              ),
+                              DataCell(
+                                Text('${product.quantity}', style: textStyle),
+                              ),
+                              DataCell(
+                                Text(
+                                  _formatCurrency(product.price),
+                                  style: textStyle,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

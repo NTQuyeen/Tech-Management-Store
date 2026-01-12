@@ -3,8 +3,8 @@ import '../../models/employee.dart';
 import '../../widgets/label_input.dart';
 
 class EmployeeFormDialog extends StatefulWidget {
-  final Employee? employee; // Nếu null là Thêm, có dữ liệu là Sửa
-  final Function(Employee) onSave;
+  final Employee? employee; // null = Add; otherwise Edit
+  final Future<void> Function(Employee) onSave;
 
   const EmployeeFormDialog({super.key, this.employee, required this.onSave});
 
@@ -14,14 +14,14 @@ class EmployeeFormDialog extends StatefulWidget {
 
 class _EmployeeFormDialogState extends State<EmployeeFormDialog>
     with SingleTickerProviderStateMixin {
-  // Controllers cho Thông tin
   final _fullNameCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
-  String _selectedRole = 'QUANLY';
 
-  // Controllers cho Mật khẩu (Chỉ dùng khi sửa)
-  final _passwordCtrl = TextEditingController(); // Dùng cho thêm mới
+  // ✅ role mới: admin / staff
+  String _selectedRole = 'staff';
+
+  final _passwordCtrl = TextEditingController(); // Add
   final _oldPassCtrl = TextEditingController();
   final _newPassCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
@@ -34,69 +34,87 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
     _tabController = TabController(length: 2, vsync: this);
 
     if (widget.employee != null) {
-      // Load dữ liệu cũ
       _fullNameCtrl.text = widget.employee!.fullName;
       _usernameCtrl.text = widget.employee!.username;
       _emailCtrl.text = widget.employee!.email;
-      _selectedRole = widget.employee!.role;
+
+      // ✅ nếu dữ liệu cũ đang là QUANLY/NHANVIEN thì map sang admin/staff
+      final r = widget.employee!.role.toLowerCase().trim();
+      if (r == 'quanly' || r == 'quản lý') {
+        _selectedRole = 'admin';
+      } else if (r == 'nhanvien' || r == 'nhân viên') {
+        _selectedRole = 'staff';
+      } else if (r == 'admin' || r == 'staff') {
+        _selectedRole = r;
+      } else {
+        _selectedRole = 'staff';
+      }
     }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _fullNameCtrl.dispose();
+    _usernameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    _oldPassCtrl.dispose();
+    _newPassCtrl.dispose();
+    _confirmPassCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Nếu là Thêm mới -> Hiển thị Form đơn giản cũ
-    if (widget.employee == null) {
-      return _buildAddLayout();
-    }
-    // Nếu là Sửa -> Hiển thị Form có Tab như yêu cầu
-    return _buildEditLayout();
+    return widget.employee == null ? _buildAddLayout() : _buildEditLayout();
   }
 
-  // ==================== GIAO DIỆN THÊM MỚI (GIỮ NGUYÊN) ====================
   Widget _buildAddLayout() {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
-      child: SizedBox(
+      child: Container(
         width: 450,
+        constraints: const BoxConstraints(maxHeight: 600),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader("THÊM TÀI KHOẢN"),
-            Padding(
-              padding: const EdgeInsets.all(30.0),
-              child: Column(
-                children: [
-                  LabelInput(
-                    label: "Họ tên",
-                    controller: _fullNameCtrl,
-                    isVertical: true,
-                  ),
-                  LabelInput(
-                    label: "Tên đăng nhập",
-                    controller: _usernameCtrl,
-                    isVertical: true,
-                  ),
-                  LabelInput(
-                    label: "Email",
-                    controller: _emailCtrl,
-                    isVertical: true,
-                  ),
-                  LabelInput(
-                    label: "Mật khẩu",
-                    controller: _passwordCtrl,
-                    isVertical: true,
-                    isPassword: true,
-                  ),
-                  _buildRoleDropdown(),
-                  const SizedBox(height: 20),
-                  _buildBottomButtons("Thêm"),
-                ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(30.0),
+                child: Column(
+                  children: [
+                    LabelInput(
+                      label: "Họ tên",
+                      controller: _fullNameCtrl,
+                      isVertical: true,
+                    ),
+                    const SizedBox(height: 15),
+                    LabelInput(
+                      label: "Tên đăng nhập",
+                      controller: _usernameCtrl,
+                      isVertical: true,
+                    ),
+                    const SizedBox(height: 15),
+                    LabelInput(
+                      label: "Email",
+                      controller: _emailCtrl,
+                      isVertical: true,
+                    ),
+                    const SizedBox(height: 15),
+                    LabelInput(
+                      label: "Mật khẩu",
+                      controller: _passwordCtrl,
+                      isVertical: true,
+                      isPassword: true,
+                    ),
+                    const SizedBox(height: 15),
+                    _buildRoleDropdown(),
+                    const SizedBox(height: 30),
+                    _buildBottomButtons("Thêm"),
+                  ],
+                ),
               ),
             ),
           ],
@@ -105,18 +123,15 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
     );
   }
 
-  // ==================== GIAO DIỆN SỬA (CÓ 2 TAB) ====================
   Widget _buildEditLayout() {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
-      child: SizedBox(
+      child: Container(
         width: 450,
-        height: 550, // Chiều cao cố định để TabBarView hoạt động tốt
+        height: 600,
         child: Column(
           children: [
             _buildHeader("SỬA THÔNG TIN TÀI KHOẢN"),
-
-            // --- THANH TAB ---
             Container(
               color: Colors.grey[200],
               child: TabBar(
@@ -130,42 +145,39 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
                 ],
               ),
             ),
-
-            // --- NỘI DUNG TAB ---
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // TAB 1: THÔNG TIN
-                  Padding(
+                  SingleChildScrollView(
                     padding: const EdgeInsets.all(30.0),
                     child: Column(
                       children: [
-                        // Tên đăng nhập (Thường không cho sửa -> ReadOnly)
                         LabelInput(
                           label: "Tên đăng nhập",
                           controller: _usernameCtrl,
                           isVertical: true,
-                        ), // Có thể thêm readOnly: true vào LabelInput nếu muốn chặn sửa
+                        ),
+                        const SizedBox(height: 15),
                         LabelInput(
                           label: "Họ tên",
                           controller: _fullNameCtrl,
                           isVertical: true,
                         ),
+                        const SizedBox(height: 15),
                         LabelInput(
                           label: "Email",
                           controller: _emailCtrl,
                           isVertical: true,
                         ),
+                        const SizedBox(height: 15),
                         _buildRoleDropdown(),
-                        const Spacer(),
+                        const SizedBox(height: 30),
                         _buildBottomButtons("Xác nhận"),
                       ],
                     ),
                   ),
-
-                  // TAB 2: MẬT KHẨU
-                  Padding(
+                  SingleChildScrollView(
                     padding: const EdgeInsets.all(30.0),
                     child: Column(
                       children: [
@@ -175,19 +187,21 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
                           isVertical: true,
                           isPassword: true,
                         ),
+                        const SizedBox(height: 15),
                         LabelInput(
                           label: "Mật khẩu mới",
                           controller: _newPassCtrl,
                           isVertical: true,
                           isPassword: true,
                         ),
+                        const SizedBox(height: 15),
                         LabelInput(
                           label: "Nhập lại mật khẩu",
                           controller: _confirmPassCtrl,
                           isVertical: true,
                           isPassword: true,
                         ),
-                        const Spacer(),
+                        const SizedBox(height: 30),
                         _buildBottomButtons("Xác nhận"),
                       ],
                     ),
@@ -201,13 +215,11 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
     );
   }
 
-  // --- CÁC WIDGET DÙNG CHUNG ---
-
   Widget _buildHeader(String title) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20),
-      color: Colors.cyanAccent[400], // Màu xanh sáng giống hình
+      color: Colors.cyanAccent[400],
       alignment: Alignment.center,
       child: Text(
         title,
@@ -236,10 +248,10 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
           child: DropdownButton<String>(
             value: _selectedRole,
             isExpanded: true,
-            items: [
-              'QUANLY',
-              'NHANVIEN',
-            ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            items: const [
+              DropdownMenuItem(value: 'admin', child: Text('admin')),
+              DropdownMenuItem(value: 'staff', child: Text('staff')),
+            ],
             onChanged: (val) => setState(() => _selectedRole = val!),
           ),
         ),
@@ -274,14 +286,12 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
           height: 40,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.yellowAccent[700],
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(2),
               ),
-              side: const BorderSide(
-                color: Colors.grey,
-              ), // Viền nhẹ cho nút trắng
+              side: const BorderSide(color: Colors.grey),
             ),
             onPressed: _saveData,
             child: Text(
@@ -294,37 +304,67 @@ class _EmployeeFormDialogState extends State<EmployeeFormDialog>
     );
   }
 
-  // --- LOGIC LƯU DỮ LIỆU ---
-  void _saveData() {
-    // 1. Nếu đang ở Tab Mật khẩu (index 1) và là Sửa -> Xử lý đổi pass
-    if (widget.employee != null && _tabController.index == 1) {
-      // Logic kiểm tra mật khẩu cũ/mới (Mockup)
+  Future<void> _saveData() async {
+    // Validate cơ bản (tab thông tin hoặc add)
+    if (_usernameCtrl.text.trim().isEmpty ||
+        _fullNameCtrl.text.trim().isEmpty ||
+        _emailCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập đầy đủ thông tin!")),
+      );
+      return;
+    }
+
+    // Add: bắt buộc có password
+    if (widget.employee == null && _passwordCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Vui lòng nhập mật khẩu!")));
+      return;
+    }
+
+    final isEdit = widget.employee != null;
+    final isPasswordTab = isEdit && _tabController.index == 1;
+
+    // Nếu đang đổi mật khẩu: check old/new/confirm
+    if (isPasswordTab) {
+      if (_oldPassCtrl.text.trim().isEmpty ||
+          _newPassCtrl.text.trim().isEmpty ||
+          _confirmPassCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Vui lòng nhập đủ mật khẩu cũ/mới!")),
+        );
+        return;
+      }
+
       if (_newPassCtrl.text != _confirmPassCtrl.text) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Mật khẩu nhập lại không khớp!")),
         );
         return;
       }
-      // Cập nhật mật khẩu vào object (Thực tế cần check pass cũ đúng không)
-      widget.employee!.password = _newPassCtrl.text;
     }
 
-    // 2. Logic Lưu chung (Thông tin hoặc Thêm mới)
-    if (_usernameCtrl.text.isNotEmpty) {
-      final empToSave = Employee(
-        id: widget.employee?.id ?? DateTime.now().toString(),
-        fullName: _fullNameCtrl.text,
-        username: _usernameCtrl.text,
-        email: _emailCtrl.text,
-        password: widget.employee != null
-            ? widget.employee!.password
-            : _passwordCtrl.text, // Giữ pass cũ nếu chỉ sửa info
-        role: _selectedRole,
-        status: widget.employee?.status ?? 'Hoạt động',
-      );
+    final empToSave = Employee(
+      id: widget.employee?.id,
+      fullName: _fullNameCtrl.text.trim(),
+      username: _usernameCtrl.text.trim(),
+      email: _emailCtrl.text.trim(),
+      role: _selectedRole,
+      status: widget.employee?.status ?? '',
 
-      widget.onSave(empToSave);
-      Navigator.pop(context);
-    }
+      // ✅ Add: password là password mới
+      // ✅ Edit tab thông tin: không đổi password, để tạm '' (vì toJsonForUpdate sẽ không gửi)
+      // ✅ Edit tab mật khẩu: password = mật khẩu cũ
+      password: widget.employee == null
+          ? _passwordCtrl.text.trim()
+          : (isPasswordTab ? _oldPassCtrl.text.trim() : ''),
+
+      // ✅ chỉ set newPassword khi đang đổi mật khẩu
+      newPassword: isPasswordTab ? _newPassCtrl.text.trim() : null,
+    );
+
+    await widget.onSave(empToSave);
+    if (mounted) Navigator.pop(context);
   }
 }

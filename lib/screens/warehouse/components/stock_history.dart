@@ -1,43 +1,9 @@
 import 'package:flutter/material.dart';
 
 class StockHistory extends StatelessWidget {
-  // Mock Data cho lịch sử
-  final List<Map<String, dynamic>> history = [
-    {
-      'date': '12/12/2024 10:30',
-      'type': 'NHAP',
-      'id': 'PN59446',
-      'product': 'iPhone 15 Pro Max',
-      'qty': 20,
-      'user': 'Admin',
-    },
-    {
-      'date': '12/12/2024 14:15',
-      'type': 'XUAT',
-      'id': 'PX2201',
-      'product': 'Macbook Air M1',
-      'qty': 2,
-      'user': 'Nhân viên 1',
-    },
-    {
-      'date': '11/12/2024 09:00',
-      'type': 'NHAP',
-      'id': 'PN59445',
-      'product': 'Samsung S24 Ultra',
-      'qty': 15,
-      'user': 'Admin',
-    },
-    {
-      'date': '10/12/2024 16:20',
-      'type': 'XUAT',
-      'id': 'PX2200',
-      'product': 'Chuột Logitech',
-      'qty': 5,
-      'user': 'Nhân viên 2',
-    },
-  ];
+  final List<Map<String, dynamic>> history;
 
-  StockHistory({super.key});
+  const StockHistory({super.key, required this.history});
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +29,7 @@ class StockHistory extends StatelessWidget {
             bool isImport = item['type'] == 'NHAP';
             return DataRow(
               cells: [
-                DataCell(Text(item['date'])),
+                DataCell(Text((item['date'] ?? '').toString())),
                 DataCell(
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -84,15 +50,15 @@ class StockHistory extends StatelessWidget {
                     ),
                   ),
                 ),
-                DataCell(Text(item['id'])),
-                DataCell(Text(item['product'])),
+                DataCell(Text((item['id'] ?? '').toString())),
+                DataCell(Text((item['product'] ?? '').toString())),
                 DataCell(
                   Text(
-                    "${item['qty']}",
+                    "${item['qty'] ?? ''}",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-                DataCell(Text(item['user'])),
+                DataCell(Text((item['user'] ?? '').toString())),
               ],
             );
           }).toList(),

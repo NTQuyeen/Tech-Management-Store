@@ -21,17 +21,28 @@ class _RevenueChartState extends State<RevenueChart> {
 
   @override
   Widget build(BuildContext context) {
+    final maxY = _getSafeMaxRevenue();
+
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: _getSafeMaxRevenue(),
+        maxY: maxY,
         barTouchData: BarTouchData(
           enabled: true,
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (group) => Colors.blueAccent,
-            tooltipBorderRadius: BorderRadius.circular(8),
+            // Một số version dùng tooltipBgColor, một số dùng getTooltipColor
+            // Nếu IDE báo lỗi getTooltipColor thì đổi sang tooltipBgColor: Colors.blueAccent,
+            getTooltipColor: (_) => Colors.blueAccent,
+
+            // ✅ tooltipRoundedRadius là double, KHÔNG phải BorderRadius
+            tooltipRoundedRadius: 8,
+
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final label = widget.data[group.x.toInt()]['label'] ?? '';
+              final i = group.x.toInt();
+              final label = (i >= 0 && i < widget.data.length)
+                  ? (widget.data[i]['label']?.toString() ?? '')
+                  : '';
+
               return BarTooltipItem(
                 '$label\n',
                 const TextStyle(
@@ -65,8 +76,12 @@ class _RevenueChartState extends State<RevenueChart> {
         ),
         titlesData: FlTitlesData(
           show: true,
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -77,7 +92,7 @@ class _RevenueChartState extends State<RevenueChart> {
                   return Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      widget.data[index]['label'] ?? '',
+                      widget.data[index]['label']?.toString() ?? '',
                       style: const TextStyle(
                         color: Colors.grey,
                         fontWeight: FontWeight.bold,
@@ -112,11 +127,11 @@ class _RevenueChartState extends State<RevenueChart> {
         ),
         borderData: FlBorderData(show: false),
         barGroups: widget.data.asMap().entries.map((entry) {
-          int index = entry.key;
-          var item = entry.value;
+          final index = entry.key;
+          final item = entry.value;
 
-          double yValue = (item['revenue'] as num).toDouble();
-          bool isTouched = index == _touchedIndex;
+          final yValue = _toDouble(item['revenue']);
+          final isTouched = index == _touchedIndex;
 
           return BarChartGroupData(
             x: index,
@@ -130,7 +145,7 @@ class _RevenueChartState extends State<RevenueChart> {
                 ),
                 backDrawRodData: BackgroundBarChartRodData(
                   show: true,
-                  toY: _getSafeMaxRevenue(),
+                  toY: maxY,
                   color: Colors.grey.shade100,
                 ),
               ),
@@ -141,17 +156,24 @@ class _RevenueChartState extends State<RevenueChart> {
     );
   }
 
+  /// Parse revenue an toàn
+  double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
   /// Prevent maxY = 0 causing chart not visible
   double _getSafeMaxRevenue() {
-    double maxVal = _getMaxRevenue();
+    final maxVal = _getMaxRevenue();
     if (maxVal <= 0) return 1000; // default minimum scale
     return maxVal * 1.2;
   }
 
   double _getMaxRevenue() {
     double maxVal = 0;
-    for (var e in widget.data) {
-      double revenue = (e['revenue'] as num).toDouble();
+    for (final e in widget.data) {
+      final revenue = _toDouble(e['revenue']);
       if (revenue > maxVal) maxVal = revenue;
     }
     return maxVal;
@@ -168,6 +190,6 @@ class _RevenueChartState extends State<RevenueChart> {
     if (amount >= 1000) {
       return "${(amount / 1000).toStringAsFixed(0)}K";
     }
-    return amount.toString();
+    return amount.toStringAsFixed(0);
   }
 }
