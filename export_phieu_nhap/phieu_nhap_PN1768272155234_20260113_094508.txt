@@ -1,0 +1,18 @@
+========== PHIEU NHAP HANG ==========
+Ma phieu: PN1768272155234
+Ngay nhap: 13/01/2026
+Trang thai thanh toan: Đã thanh toán
+Tao luc: 13/01/2026 09:45:08
+
+--- NHA CUNG CAP ---
+Ten: KMA Forum
+SDT: 038981721
+Email: kma@gmal.com
+Dia chi: Hà nội
+
+--- CHI TIET HANG NHAP ---
+STT | MaSP | TenSP | SL | GiaNhap | ThanhTien
+1 | CT8 | laptop1 | 10 | 15.000.000 đ | 150.000.000 đ
+
+TONG TIEN NHAP: 150.000.000 đ
+========== END ==========

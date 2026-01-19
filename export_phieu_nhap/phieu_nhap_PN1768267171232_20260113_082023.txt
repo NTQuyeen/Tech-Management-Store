@@ -1,0 +1,18 @@
+========== PHIEU NHAP HANG ==========
+Ma phieu: PN1768267171232
+Ngay nhap: 13/01/2026
+Trang thai thanh toan: Đã thanh toán
+Tao luc: 13/01/2026 08:20:23
+
+--- NHA CUNG CAP ---
+Ten: Nhà phân phối Minh Khang
+SDT: 0987654321
+Email: support@minhkhang.vn
+Dia chi: Đà Nẵng
+
+--- CHI TIET HANG NHAP ---
+STT | MaSP | TenSP | SL | GiaNhap | ThanhTien
+1 | AD1 | HDD 1TB | 10 | 500.000 đ | 5.000.000 đ
+
+TONG TIEN NHAP: 5.000.000 đ
+========== END ==========

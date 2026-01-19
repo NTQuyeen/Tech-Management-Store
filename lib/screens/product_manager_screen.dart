@@ -15,10 +15,12 @@ class ProductManagerScreen extends StatefulWidget {
 }
 
 class _ProductManagerScreenState extends State<ProductManagerScreen> {
-  // DỮ LIỆU
+  // DỮ LIỆU (chỉ danh sách bán: available > 0)
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
-  final List<String> _categoryList = [
+
+  // Category cố định
+  final List<String> _categoryList = const [
     'Laptop',
     'Điện thoại',
     'Máy ảnh',
@@ -27,7 +29,7 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
   ];
 
   // Map tên loại (UI) -> categoryId (DB)
-  final Map<String, int> _categoryIdMap = {
+  final Map<String, int> _categoryIdMap = const {
     'Laptop': 1,
     'Điện thoại': 2,
     'Máy ảnh': 3,
@@ -35,14 +37,9 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     'Khác': 5,
   };
 
-  int _parseIntLoose(String s) {
-    final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
-    return int.tryParse(cleaned) ?? 0;
-  }
-
   // CONTROLLERS
   final _nameCtrl = TextEditingController();
-  final _idCtrl = TextEditingController(); // ✅ dùng cho Mã SP (productCode)
+  final _idCtrl = TextEditingController(); // Mã SP (productCode)
   final _priceCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
@@ -53,28 +50,16 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
   final ProductApi _productApi = ProductApi();
   bool _isLoading = false;
 
+  // trạng thái “đã tìm thấy trong kho” cho dialog Add
+  bool _foundInWarehouse = false;
+
+  // cache tạm sản phẩm tìm từ kho theo code (để dùng khi lưu)
+  Product? _warehouseHit;
+
   @override
   void initState() {
     super.initState();
     _loadProducts();
-  }
-
-  Future<void> _loadProducts() async {
-    if (_isLoading) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final items = await _productApi.list();
-      setState(() {
-        _products = items;
-        _filteredProducts = List.from(items);
-        _selectedIndex = null;
-      });
-    } catch (e) {
-      _showError('Không tải được danh sách sản phẩm: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   @override
@@ -87,7 +72,65 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     super.dispose();
   }
 
-  // --- LOGIC ---
+  // ======================
+  // Helpers
+  // ======================
+  int _parseIntLoose(String s) {
+    final cleaned = s.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(cleaned) ?? 0;
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  String _categoryFromProduct(Product p) {
+    // nếu category từ BE không nằm trong list, fallback về item đầu
+    return _categoryList.contains(p.category)
+        ? p.category
+        : _categoryList.first;
+  }
+
+  // ✅ Tìm sản phẩm trong kho bằng cách gọi API BE:
+  // GET /shopqtqt/import/product/{code}
+  Future<Product?> _findWarehouseByCodeApi(String code) async {
+    final c = code.trim();
+    if (c.isEmpty) return null;
+
+    try {
+      final p = await _productApi.getImportProductByCode(c);
+
+      // Nếu bạn muốn: phải có stock > 0 mới cho phép đưa lên bán
+      if (p.stock <= 0) return null;
+
+      return p;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ======================
+  // Load / Search in table
+  // ======================
+  Future<void> _loadProducts() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      // ✅ danh sách bán: available > 0
+      final items = await _productApi.listForSale();
+      setState(() {
+        _products = items;
+        _filteredProducts = List.from(items);
+        _selectedIndex = null;
+      });
+    } catch (e) {
+      _toast('Không tải được danh sách sản phẩm: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _handleSearch(String value) {
     final q = value.trim().toLowerCase();
     setState(() {
@@ -98,9 +141,7 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
             .where(
               (p) =>
                   p.name.toLowerCase().contains(q) ||
-                  p.productCode.toLowerCase().contains(
-                    q,
-                  ), // ✅ search theo Mã SP
+                  p.productCode.toLowerCase().contains(q),
             )
             .toList();
       }
@@ -113,38 +154,111 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     setState(() => _selectedIndex = index);
   }
 
-  // --- DIALOGS ---
+  // ======================
+  // Dialogs
+  // ======================
+  void _clearControllers() {
+    _nameCtrl.clear();
+    _idCtrl.clear();
+    _priceCtrl.clear();
+    _qtyCtrl.clear();
+    _foundInWarehouse = false;
+    _warehouseHit = null;
+  }
+
   void _showAddDialog() {
     _clearControllers();
+
+    // dialog Add: bắt buộc search theo mã -> fill tên + loại
     String localCategory = _categoryList.first;
+
     _showFormDialog(
-      title: "Thêm sản phẩm mới",
+      title: "Thêm sản phẩm bán",
       btnText: "Lưu",
       initialCategory: localCategory,
-      onSave: (category) => _saveProduct(category),
+      isAddSaleFlow: true,
+      onSave: (category) => _saveSaleProduct(category),
+      onSearchByCode: (code, setStateDialog) async {
+        final hit = await _findWarehouseByCodeApi(code);
+
+        if (hit == null) {
+          setStateDialog(() {
+            _foundInWarehouse = false;
+            _warehouseHit = null;
+            _nameCtrl.clear();
+          });
+          _toast("Chưa có sản phẩm này trong kho hoặc stock = 0");
+          return;
+        }
+
+        final cat = _categoryFromProduct(hit);
+
+        setStateDialog(() {
+          _foundInWarehouse = true;
+          _warehouseHit = hit;
+          _nameCtrl.text = hit.name;
+          localCategory = cat; // update localCategory
+        });
+
+        _toast("Đã tìm thấy trong kho: ${hit.name}");
+      },
     );
   }
 
   void _showEditDialog() {
     if (_selectedIndex == null) {
-      _showError("Vui lòng chọn sản phẩm cần sửa!");
+      _toast("Vui lòng chọn sản phẩm cần sửa!");
       return;
     }
 
     Product p = _filteredProducts[_selectedIndex!];
+
     _nameCtrl.text = p.name;
-    _idCtrl.text = p.productCode; // ✅ mã SP
+    _idCtrl.text = p.productCode;
     _priceCtrl.text = p.price.toStringAsFixed(0);
-    _qtyCtrl.text = p.quantity.toString();
-    String localCategory = _categoryList.contains(p.category)
-        ? p.category
-        : _categoryList.first;
+    _qtyCtrl.text = p.available.toString();
+
+    String localCategory = _categoryFromProduct(p);
 
     _showFormDialog(
-      title: "Sửa sản phẩm ${p.productCode}", // ✅ hiển thị mã SP
+      title: "Sửa sản phẩm ${p.productCode}",
       btnText: "Cập nhật",
       initialCategory: localCategory,
+      isAddSaleFlow: false,
       onSave: (category) => _updateProduct(category),
+      onSearchByCode: null,
+    );
+  }
+
+  void _showDeleteDialog() {
+    if (_selectedIndex == null) {
+      _toast("Vui lòng chọn sản phẩm cần xóa!");
+      return;
+    }
+    Product p = _filteredProducts[_selectedIndex!];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Xác nhận xóa"),
+        content: Text(
+          "Bạn có chắc chắn muốn xóa ${p.name} (${p.productCode})?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Không"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await _deleteProduct();
+              if (context.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Xóa", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -153,12 +267,23 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     required String btnText,
     required String initialCategory,
     required Future<void> Function(String) onSave,
+
+    // add sale flow
+    required bool isAddSaleFlow,
+
+    // nút search nằm trong ô Mã SP
+    Future<void> Function(
+      String code,
+      void Function(void Function()) setStateDialog,
+    )?
+    onSearchByCode,
   }) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         String currentCategory = initialCategory;
+
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
@@ -173,14 +298,41 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
               content: SizedBox(
                 width: 800,
                 child: ProductForm(
+                  // controllers
                   nameCtrl: _nameCtrl,
                   idCtrl: _idCtrl,
                   priceCtrl: _priceCtrl,
                   qtyCtrl: _qtyCtrl,
+
+                  // categories
                   categoryList: _categoryList,
                   selectedCategory: currentCategory,
-                  onCategoryChanged: (val) =>
-                      setStateDialog(() => currentCategory = val!),
+                  onCategoryChanged: (val) => setStateDialog(
+                    () => currentCategory = val ?? _categoryList.first,
+                  ),
+
+                  // ✅ add: search button in id field
+                  enableCodeSearch: onSearchByCode != null,
+                  onSearchCode: onSearchByCode == null
+                      ? null
+                      : () async {
+                          final code = _idCtrl.text.trim();
+                          if (code.isEmpty) {
+                            _toast("Vui lòng nhập Mã SP");
+                            return;
+                          }
+
+                          await onSearchByCode(code, setStateDialog);
+
+                          // nếu tìm thấy -> auto set dropdown theo product vừa tìm
+                          if (_foundInWarehouse && _warehouseHit != null) {
+                            final cat = _categoryFromProduct(_warehouseHit!);
+                            setStateDialog(() => currentCategory = cat);
+                          }
+                        },
+
+                  // ✅ khóa tên + loại khi đã tìm thấy trong kho
+                  lockNameAndCategory: isAddSaleFlow && _foundInWarehouse,
                 ),
               ),
               actions: [
@@ -216,72 +368,64 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     );
   }
 
-  void _showDeleteDialog() {
-    if (_selectedIndex == null) {
-      _showError("Vui lòng chọn sản phẩm cần xóa!");
-      return;
-    }
-    Product p = _filteredProducts[_selectedIndex!];
+  // ======================
+  // CRUD
+  // ======================
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Xác nhận xóa"),
-        content: Text(
-          "Bạn có chắc chắn muốn xóa ${p.name} (${p.productCode})?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Không"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await _deleteProduct();
-              if (context.mounted) Navigator.pop(ctx);
-            },
-            child: const Text("Xóa", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- CRUD LOGIC ---
-  Future<void> _saveProduct(String category) async {
-    if (_nameCtrl.text.trim().isEmpty) {
-      _showError("Vui lòng nhập Tên sản phẩm");
-      return;
-    }
-
-    final code = _idCtrl.text.trim(); // ✅ productCode
+  /// ✅ Luồng “Thêm sản phẩm bán”:
+  /// - bắt buộc: tìm theo mã trong kho (API)
+  /// - auto fill name + category
+  /// - user nhập price + qty
+  /// - lưu: release qty lên bán
+  Future<void> _saveSaleProduct(String category) async {
+    final code = _idCtrl.text.trim();
     if (code.isEmpty) {
-      _showError("Vui lòng nhập Mã SP (ví dụ P101)");
+      _toast("Vui lòng nhập Mã SP rồi bấm tìm");
+      return;
+    }
+
+    Product? hit = _warehouseHit ?? await _findWarehouseByCodeApi(code);
+    if (hit == null) {
+      _toast("Chưa có sản phẩm này trong kho hoặc stock = 0");
       return;
     }
 
     final categoryId = _categoryIdMap[category];
     if (categoryId == null) {
-      _showError("Loại sản phẩm không hợp lệ");
+      _toast("Loại sản phẩm không hợp lệ");
       return;
     }
 
-    // ✅ THÊM: không gửi id kỹ thuật
-    // ✅ Key khớp ProductDTO: productCode, name, idCategory, price, stock
-    final body = <String, dynamic>{
-      "productCode": code,
-      "name": _nameCtrl.text.trim(),
-      "idCategory": categoryId,
-      "price": _parseIntLoose(_priceCtrl.text),
-      "stock": _parseIntLoose(_qtyCtrl.text),
-    };
+    final price = _parseIntLoose(_priceCtrl.text);
+    if (price <= 0) {
+      _toast("Vui lòng nhập Đơn giá hợp lệ");
+      return;
+    }
+
+    final qty = _parseIntLoose(_qtyCtrl.text);
+    if (qty <= 0) {
+      _toast("Vui lòng nhập Số lượng hợp lệ");
+      return;
+    }
 
     try {
-      await _productApi.createRaw(body);
+      // ✅ 1) Cập nhật giá trước (và các field cần thiết)
+      await _productApi.updateRaw({
+        "id": int.tryParse(hit.id) ?? hit.id,
+        "productCode": hit.productCode,
+        "name": hit.name,
+        "idCategory": categoryId,
+        "price": price,
+        // nếu BE cần thêm field khác (priceIn/description) thì gửi kèm ở đây
+      });
+
+      // ✅ 2) Rồi mới đưa qty lên bán
+      await _productApi.releaseToSale(productId: hit.id, qty: qty);
+
       await _loadProducts();
+      _toast("Đã đưa $qty lên bán và cập nhật giá $price");
     } catch (e) {
-      _showError('Thêm sản phẩm thất bại: $e');
+      _toast("Thêm sản phẩm bán thất bại: $e");
     }
   }
 
@@ -289,32 +433,31 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     if (_selectedIndex == null) return;
 
     final selected = _filteredProducts[_selectedIndex!];
-
-    final code = _idCtrl.text.trim(); // ✅ productCode
+    final code = _idCtrl.text.trim();
     if (code.isEmpty) {
-      _showError("Vui lòng nhập Mã SP (ví dụ P101)");
+      _toast("Vui lòng nhập Mã SP");
       return;
     }
 
     final categoryId = _categoryIdMap[category];
     if (categoryId == null) {
-      _showError("Loại sản phẩm không hợp lệ");
+      _toast("Loại sản phẩm không hợp lệ");
       return;
     }
 
     final idNum = int.tryParse(selected.id);
     if (idNum == null) {
-      _showError("Không xác định được ID nội bộ để cập nhật");
+      _toast("Không xác định được ID nội bộ để cập nhật");
       return;
     }
 
-    // ✅ UPDATE: phải gửi id kỹ thuật + productCode
     final body = <String, dynamic>{
       "id": idNum,
       "productCode": code,
       "name": _nameCtrl.text.trim(),
       "idCategory": categoryId,
       "price": _parseIntLoose(_priceCtrl.text),
+      // giữ logic cũ của bạn:
       "stock": _parseIntLoose(_qtyCtrl.text),
     };
 
@@ -322,7 +465,7 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
       await _productApi.updateRaw(body);
       await _loadProducts();
     } catch (e) {
-      _showError('Cập nhật sản phẩm thất bại: $e');
+      _toast('Cập nhật sản phẩm thất bại: $e');
     }
   }
 
@@ -331,26 +474,16 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
     final p = _filteredProducts[_selectedIndex!];
 
     try {
-      // ✅ Xóa theo id kỹ thuật (product_id)
       await _productApi.deleteById(p.id);
       await _loadProducts();
     } catch (e) {
-      _showError('Xóa sản phẩm thất bại: $e');
+      _toast('Xóa sản phẩm thất bại: $e');
     }
   }
 
-  void _clearControllers() {
-    _nameCtrl.clear();
-    _idCtrl.clear();
-    _priceCtrl.clear();
-    _qtyCtrl.clear();
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  // --- UI CHÍNH ---
+  // ======================
+  // UI
+  // ======================
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -394,19 +527,6 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
                 Colors.red,
                 isAdmin ? _showDeleteDialog : null,
               ),
-              const SizedBox(width: 10),
-              _buildActionButton(
-                "Xuất Excel",
-                Icons.file_download,
-                Colors.green,
-                () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Tính năng Xuất Excel đang phát triển"),
-                    ),
-                  );
-                },
-              ),
             ],
           ),
         ),
@@ -443,26 +563,6 @@ class _ProductManagerScreenState extends State<ProductManagerScreen> {
         padding: const EdgeInsets.all(18),
       ),
       onPressed: onTap,
-    );
-  }
-}
-
-extension ProductExtension on Product {
-  Product copyWith({
-    String? id,
-    String? name,
-    String? category,
-    int? quantity,
-    double? price,
-    String? productCode,
-  }) {
-    return Product(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      category: category ?? this.category,
-      quantity: quantity ?? this.quantity,
-      price: price ?? this.price,
-      productCode: productCode ?? this.productCode,
     );
   }
 }

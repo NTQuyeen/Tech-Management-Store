@@ -14,6 +14,8 @@ class SidebarMenu extends StatelessWidget {
     required this.onItemSelected,
   });
 
+  bool get _isAdmin => userRole == 'admin';
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -39,27 +41,25 @@ class SidebarMenu extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // --- DANH SÁCH MENU (Đã đánh lại số thứ tự) ---
-
           // Index 0: Sản phẩm
           _buildItem(0, Icons.phone_android, "Sản phẩm"),
 
-          // ĐÃ XÓA "NHẬP HÀNG" (Cũ là Index 1)
+          // ✅ Index 1: Nhập hàng - CHỈ ADMIN
+          if (_isAdmin) _buildItem(1, Icons.download, "Nhập hàng"),
 
-          // Index 1: Xuất hàng (Cũ là 2 -> Giờ thành 1)
-          _buildItem(1, Icons.upload, "Xuất hóa đơn"),
+          // Index 2: Xuất hóa đơn
+          _buildItem(2, Icons.upload, "Xuất hóa đơn"),
 
-          // LOGIC PHÂN QUYỀN: Chỉ Admin mới thấy
-          if (userRole == 'admin') ...[
-            // Index 2: Nhân viên (Cũ là 3 -> Giờ thành 2)
-            _buildItem(2, Icons.people, "Nhân viên"),
-
-            // Index 3: Doanh thu (Cũ là 4 -> Giờ thành 3)
-            _buildItem(3, Icons.bar_chart, "Doanh thu"),
+          // Chỉ Admin mới thấy
+          if (_isAdmin) ...[
+            // Index 3: Nhân viên
+            _buildItem(3, Icons.people, "Nhân viên"),
+            // Index 4: Doanh thu
+            _buildItem(4, Icons.bar_chart, "Doanh thu"),
           ],
 
-          // Index 4: Kho hàng (Cũ là 5 -> Giờ thành 4)
-          _buildItem(4, Icons.warehouse, "Kho hàng"),
+          // Index 5: Kho hàng (ai cũng thấy)
+          _buildItem(5, Icons.warehouse, "Kho hàng"),
 
           const Spacer(),
 
@@ -89,7 +89,8 @@ class SidebarMenu extends StatelessWidget {
   }
 
   Widget _buildItem(int index, IconData icon, String title) {
-    bool isActive = index == selectedIndex;
+    final bool isActive = index == selectedIndex;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(

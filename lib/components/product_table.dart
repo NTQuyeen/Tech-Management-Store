@@ -148,17 +148,14 @@ class _ProductTableState extends State<ProductTable> {
                                 ),
                               ),
                               DataCell(Text(product.name, style: textStyle)),
-
-                              // ✅ MÃ SP ĐÚNG
                               DataCell(
                                 Text(product.productCode, style: textStyle),
                               ),
-
                               DataCell(
                                 Text(product.category, style: textStyle),
                               ),
                               DataCell(
-                                Text('${product.quantity}', style: textStyle),
+                                Text('${product.available}', style: textStyle),
                               ),
                               DataCell(
                                 Text(

@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '/../../constants.dart';
+import 'package:http/http.dart' as http;
 
-// Import các components vừa tách
+import '/../../constants.dart';
 import './revenue_stat_card.dart';
-import './revenue_chart.dart';
 
 class RevenueScreen extends StatefulWidget {
   const RevenueScreen({super.key});
@@ -13,68 +13,149 @@ class RevenueScreen extends StatefulWidget {
 }
 
 class _RevenueScreenState extends State<RevenueScreen> {
+  // Desktop Windows: backend chạy cùng máy -> localhost
+  static const String BASE_URL = "http://localhost:8080/shopqtqt";
+
   bool _isDailyView = true;
 
-  // --- MOCK DATA ---
-  final List<Map<String, dynamic>> _dailyData = [
-    {'label': '01/12', 'revenue': 15000000, 'orders': 5},
-    {'label': '02/12', 'revenue': 22000000, 'orders': 8},
-    {'label': '03/12', 'revenue': 18500000, 'orders': 6},
-    {'label': '04/12', 'revenue': 32000000, 'orders': 12},
-    {'label': '05/12', 'revenue': 12000000, 'orders': 4},
-    {'label': '06/12', 'revenue': 28000000, 'orders': 10},
-    {'label': 'Hôm nay', 'revenue': 45000000, 'orders': 15},
-  ];
+  bool _loading = false;
+  String? _error;
 
-  final List<Map<String, dynamic>> _monthlyData = [
-    {'label': 'Thg 1', 'revenue': 120000000, 'orders': 45},
-    {'label': 'Thg 2', 'revenue': 98000000, 'orders': 38},
-    {'label': 'Thg 3', 'revenue': 150000000, 'orders': 60},
-    {'label': 'Thg 4', 'revenue': 110000000, 'orders': 50},
-    {'label': 'Thg 5', 'revenue': 180000000, 'orders': 75},
-    {'label': 'Thg 6', 'revenue': 210000000, 'orders': 90},
-    {'label': 'Thg 7', 'revenue': 195000000, 'orders': 85},
-    {'label': 'Thg 8', 'revenue': 230000000, 'orders': 100},
-    {'label': 'Thg 9', 'revenue': 170000000, 'orders': 70},
-    {'label': 'Thg 10', 'revenue': 140000000, 'orders': 55},
-    {'label': 'Thg 11', 'revenue': 260000000, 'orders': 110},
-    {'label': 'Thg 12', 'revenue': 300000000, 'orders': 130},
-  ];
+  // doanh thu ngày (hôm nay)
+  int _todayRevenue = 0;
+  List<CustomerSpend> _todayCustomers = [];
 
-  final List<Map<String, dynamic>> _topProducts = [
-    {'name': 'iPhone 15 Pro Max', 'qty': 120, 'revenue': 3800000000},
-    {'name': 'Samsung S24 Ultra', 'qty': 95, 'revenue': 2850000000},
-    {'name': 'Macbook Air M1', 'qty': 80, 'revenue': 1480000000},
-    {'name': 'Chuột Logitech G102', 'qty': 300, 'revenue': 150000000},
-  ];
+  // doanh thu tháng (tháng này)
+  int _monthRevenue = 0;
 
-  // --- LOGIC ---
-  List<Map<String, dynamic>> get _currentData =>
-      _isDailyView ? _dailyData : _monthlyData;
-
-  double get _totalRevenue => _currentData.fold(
-    0,
-    (sum, item) => sum + (item['revenue'] as num).toDouble(),
-  );
-
-  int get _totalOrders =>
-      _currentData.fold(0, (sum, item) => sum + (item['orders'] as int));
-
-  double get _totalProfit => _totalRevenue * 0.2;
+  // thống kê phụ (optional) để fill vào RevenueStatCard
+  int _totalOrders = 0; // số invoice items (không phải số hóa đơn)
+  double _profit = 0; // tạm tính 20%
 
   @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      if (_isDailyView) {
+        final res = await _fetchRevenueDate();
+        _todayRevenue = res.total;
+
+        // list trả về là các item bán (invoice items)
+        _totalOrders = res.list.length;
+        _profit = _todayRevenue * 0.2;
+
+        // Group theo phone để ra danh sách khách
+        final Map<String, CustomerSpend> grouped = {};
+
+        for (final item in res.list) {
+          final phone = (item.phone ?? "").trim();
+          if (phone.isEmpty) continue;
+
+          final qty = item.quantity ?? 0;
+          final price =
+              item.price ?? 0; // backend trả BigDecimal -> json number
+          final spent = price * qty;
+
+          grouped.putIfAbsent(phone, () => CustomerSpend(phone: phone));
+          grouped[phone]!.totalQty += qty;
+          grouped[phone]!.totalSpent += spent;
+        }
+
+        // Gọi /customer/{sdt} để lấy fullName (và email/address nếu muốn)
+        final phones = grouped.keys.toList();
+        final infos = await Future.wait(phones.map(_fetchCustomerByPhone));
+
+        for (final info in infos) {
+          if (info == null) continue;
+          final g = grouped[info.phone];
+          if (g != null) {
+            g.fullName = info.fullName;
+            g.email = info.email;
+            g.address = info.address;
+          }
+        }
+
+        final listCustomers = grouped.values.toList()
+          ..sort((a, b) => b.totalSpent.compareTo(a.totalSpent));
+        _todayCustomers = listCustomers;
+      } else {
+        final res = await _fetchRevenueMonth();
+        _monthRevenue = res.total;
+
+        _totalOrders = res.list.length;
+        _profit = _monthRevenue * 0.2;
+      }
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  // =========================
+  // API CALLS
+  // =========================
+  Future<RevenueResponse> _fetchRevenueDate() async {
+    final uri = Uri.parse("$BASE_URL/revenue/date");
+    final r = await http.get(uri);
+
+    if (r.statusCode != 200) {
+      throw Exception("GET /revenue/date lỗi: ${r.statusCode} - ${r.body}");
+    }
+    return RevenueResponse.fromJson(
+      json.decode(r.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<RevenueResponse> _fetchRevenueMonth() async {
+    final uri = Uri.parse("$BASE_URL/revenue/month");
+    final r = await http.get(uri);
+
+    if (r.statusCode != 200) {
+      throw Exception("GET /revenue/month lỗi: ${r.statusCode} - ${r.body}");
+    }
+    return RevenueResponse.fromJson(
+      json.decode(r.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<CustomerDTO?> _fetchCustomerByPhone(String phone) async {
+    final uri = Uri.parse("$BASE_URL/customer/$phone");
+    final r = await http.get(uri);
+
+    if (r.statusCode == 404) return null;
+    if (r.statusCode != 200) return null;
+
+    return CustomerDTO.fromJson(json.decode(r.body) as Map<String, dynamic>);
+  }
+
+  // =========================
+  // UI
+  // =========================
+  @override
   Widget build(BuildContext context) {
+    final totalRevenue = _isDailyView ? _todayRevenue : _monthRevenue;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. HEADER
+          // HEADER + TOGGLE
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "TỔNG QUAN KINH DOANH",
+                "DOANH THU",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               Container(
@@ -86,110 +167,70 @@ class _RevenueScreenState extends State<RevenueScreen> {
                 child: Row(
                   children: [
                     _buildToggleButton("Theo Ngày", true),
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: Colors.grey.shade300,
-                    ),
                     _buildToggleButton("Theo Tháng", false),
                   ],
                 ),
               ),
             ],
           ),
+
+          const SizedBox(height: 12),
+
+          if (_loading) const LinearProgressIndicator(),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "Lỗi: $_error",
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
           const SizedBox(height: 20),
 
-          // 2. THẺ THỐNG KÊ
+          // STAT CARDS
           Row(
             children: [
-              RevenueStatCard(
-                title: "DOANH THU",
-                value: _formatCurrency(_totalRevenue),
-                icon: Icons.monetization_on,
-                color: Colors.green,
-                percent: "+12%",
+              Expanded(
+                child: RevenueStatCard(
+                  title: _isDailyView
+                      ? "DOANH THU HÔM NAY"
+                      : "DOANH THU THÁNG NÀY",
+                  value: _formatCurrency(totalRevenue.toDouble()),
+                  icon: Icons.attach_money,
+                  color: Colors.green,
+                  percent: "",
+                ),
               ),
               const SizedBox(width: 20),
               RevenueStatCard(
-                title: "ĐƠN HÀNG",
+                title: "SỐ LƯỢNG ITEM",
                 value: "$_totalOrders",
                 icon: Icons.shopping_cart,
                 color: Colors.orange,
-                percent: "-5%",
+                percent: "",
               ),
               const SizedBox(width: 20),
               RevenueStatCard(
-                title: "LỢI NHUẬN",
-                value: _formatCurrency(_totalProfit),
+                title: "LỢI NHUẬN (TẠM)",
+                value: _formatCurrency(_profit),
                 icon: Icons.pie_chart,
                 color: Colors.blue,
-                percent: "+8%",
+                percent: "",
               ),
             ],
           ),
-          const SizedBox(height: 30),
 
-          // 3. BIỂU ĐỒ + TOP PRODUCTS
-          SizedBox(
-            height: 450,
-            child: Row(
-              children: [
-                // Chart
-                Expanded(
-                  flex: 7,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Biểu đồ doanh thu (${_isDailyView ? '7 ngày qua' : 'Năm 2024'})",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 30),
-                        Expanded(
-                          child: RevenueChart(
-                            data: _currentData,
-                            isDailyView: _isDailyView,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 20),
+          const SizedBox(height: 24),
 
-                // TOP PRODUCTS
-                Expanded(flex: 3, child: _buildTopProductsList()),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          // 4. BẢNG CHI TIẾT
-          _buildDetailTable(),
+          // CONTENT (NO CHART!)
+          _isDailyView ? _buildDailyView() : _buildMonthlyView(),
         ],
       ),
     );
   }
 
-  // ---------------- WIDGET PHỤ ----------------
-
-  Widget _buildTopProductsList() {
+  Widget _buildDailyView() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -203,64 +244,55 @@ class _RevenueScreenState extends State<RevenueScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Top Bán Chạy",
+            "Khách hàng đã mua hôm nay",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
 
-          Expanded(
-            child: ListView.separated(
-              itemCount: _topProducts.length,
-              separatorBuilder: (_, __) => const Divider(),
-              itemBuilder: (ctx, index) {
-                final item = _topProducts[index];
+          if (!_loading && _todayCustomers.isEmpty)
+            Text(
+              "Hôm nay chưa có khách mua.",
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
 
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: index == 0
-                        ? Colors.amber
-                        : Colors.grey[200],
-                    child: Text(
-                      "${index + 1}",
-                      style: TextStyle(
-                        color: index == 0 ? Colors.white : Colors.black,
+          if (_todayCustomers.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(
+                  Colors.grey.shade100,
+                ),
+                columns: const [
+                  DataColumn(label: Text("Khách hàng")),
+                  DataColumn(label: Text("SĐT")),
+                  DataColumn(label: Text("SL SP")),
+                  DataColumn(label: Text("Tổng chi")),
+                ],
+                rows: _todayCustomers.map((c) {
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          (c.fullName == null || c.fullName!.trim().isEmpty)
+                              ? "Không rõ"
+                              : c.fullName!,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
-                    ),
-                  ),
-                  title: Text(
-                    item['name'],
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  subtitle: Text("${item['qty']} đã bán"),
-                  trailing: Text(
-                    _formatCompactCurrency(item['revenue']),
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                );
-              },
+                      DataCell(Text(c.phone)),
+                      DataCell(Text("${c.totalQty}")),
+                      DataCell(Text(_formatCurrency(c.totalSpent.toDouble()))),
+                    ],
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-
-          Center(
-            child: TextButton(
-              onPressed: () {},
-              child: const Text("Xem tất cả"),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildDetailTable() {
+  Widget _buildMonthlyView() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -270,80 +302,32 @@ class _RevenueScreenState extends State<RevenueScreen> {
           BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Chi tiết giao dịch",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.file_download, size: 18),
-                label: const Text("Xuất Báo Cáo"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: () {},
-              ),
-            ],
+          const Text(
+            "Doanh thu tháng này",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 10),
-
-          SizedBox(
-            width: double.infinity,
-            child: DataTable(
-              headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
-              columns: const [
-                DataColumn(label: Text("Thời gian")),
-                DataColumn(label: Text("Số đơn hàng")),
-                DataColumn(label: Text("Doanh thu")),
-                DataColumn(label: Text("Trạng thái")),
-              ],
-              rows: _currentData.map((e) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      Text(
-                        e['label'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    DataCell(Text("${e['orders']}")),
-                    DataCell(
-                      Text(_formatCurrency((e['revenue'] as num).toDouble())),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          "Đã chốt",
-                          style: TextStyle(color: Colors.green, fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+          Text(
+            _formatCurrency(_monthRevenue.toDouble()),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
+  // TOGGLE
   Widget _buildToggleButton(String text, bool isDayMode) {
     final isSelected = _isDailyView == isDayMode;
 
     return InkWell(
-      onTap: () => setState(() => _isDailyView = isDayMode),
+      onTap: () async {
+        if (_isDailyView == isDayMode) return;
+        setState(() => _isDailyView = isDayMode);
+        await _loadData();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
@@ -364,16 +348,101 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // ---------------- FORMAT ----------------
+  // FORMAT
   String _formatCurrency(double amount) {
-    return "${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\\d{1,3})(?=(\\d{3})+(?!\\d))'), (m) => '${m[1]}.')} đ";
+    return "${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} đ";
   }
+}
 
-  String _formatCompactCurrency(num amount) {
-    if (amount >= 1000000000)
-      return "${(amount / 1000000000).toStringAsFixed(1)}B";
-    if (amount >= 1000000) return "${(amount / 1000000).toStringAsFixed(0)}M";
-    if (amount >= 1000) return "${(amount / 1000).toStringAsFixed(0)}K";
-    return amount.toString();
+// =========================
+// MODELS (fit đúng RevenueResponse + ProductInvoiceResponse của bạn)
+// RevenueResponse: { total: Long, list: List<ProductInvoiceResponse> }
+// ProductInvoiceResponse fields: id, quantity, name, price, productCode, phone
+// =========================
+class RevenueResponse {
+  final int total;
+  final List<ProductInvoiceResponse> list;
+
+  RevenueResponse({required this.total, required this.list});
+
+  factory RevenueResponse.fromJson(Map<String, dynamic> json) {
+    final total = (json['total'] ?? 0) as num;
+    final raw = (json['list'] as List?) ?? [];
+    return RevenueResponse(
+      total: total.toInt(),
+      list: raw
+          .map(
+            (e) => ProductInvoiceResponse.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+    );
   }
+}
+
+class ProductInvoiceResponse {
+  final int? id;
+  final int? quantity;
+  final String? name;
+  final int? price;
+  final String? productCode;
+  final String? phone;
+
+  ProductInvoiceResponse({
+    this.id,
+    this.quantity,
+    this.name,
+    this.price,
+    this.productCode,
+    this.phone,
+  });
+
+  factory ProductInvoiceResponse.fromJson(Map<String, dynamic> json) {
+    return ProductInvoiceResponse(
+      id: (json['id'] as num?)?.toInt(),
+      quantity: (json['quantity'] as num?)?.toInt(),
+      name: json['name']?.toString(),
+      price: (json['price'] as num?)?.toInt(),
+      productCode: json['productCode']?.toString(),
+      phone: json['phone']?.toString(),
+    );
+  }
+}
+
+class CustomerDTO {
+  final int? id;
+  final String? fullName;
+  final String phone;
+  final String? email;
+  final String? address;
+
+  CustomerDTO({
+    this.id,
+    this.fullName,
+    required this.phone,
+    this.email,
+    this.address,
+  });
+
+  factory CustomerDTO.fromJson(Map<String, dynamic> json) {
+    return CustomerDTO(
+      id: (json['id'] as num?)?.toInt(),
+      fullName: json['fullName']?.toString(),
+      phone: json['phone']?.toString() ?? "",
+      email: json['email']?.toString(),
+      address: json['address']?.toString(),
+    );
+  }
+}
+
+// Group theo SĐT để hiện “khách đã mua”
+class CustomerSpend {
+  final String phone;
+  String? fullName;
+  String? email;
+  String? address;
+
+  int totalQty = 0;
+  int totalSpent = 0;
+
+  CustomerSpend({required this.phone});
 }

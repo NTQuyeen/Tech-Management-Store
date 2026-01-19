@@ -6,7 +6,6 @@ import '../../../services/warehouse_api.dart';
 // Import các components
 import 'warehouse_stat_card.dart';
 import 'inventory_table.dart';
-import 'stock_history.dart';
 
 class WarehouseScreen extends StatefulWidget {
   const WarehouseScreen({super.key});
@@ -15,9 +14,7 @@ class WarehouseScreen extends StatefulWidget {
   State<WarehouseScreen> createState() => _WarehouseScreenState();
 }
 
-class _WarehouseScreenState extends State<WarehouseScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _WarehouseScreenState extends State<WarehouseScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
 
   List<Product> _products = [];
@@ -25,15 +22,17 @@ class _WarehouseScreenState extends State<WarehouseScreen>
 
   final WarehouseApi _warehouseApi = WarehouseApi();
   bool _isLoadingInventory = false;
-  bool _isLoadingHistory = false;
-  List<Map<String, dynamic>> _history = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadInventory();
-    _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInventory() async {
@@ -53,42 +52,28 @@ class _WarehouseScreenState extends State<WarehouseScreen>
     }
   }
 
-  Future<void> _loadHistory() async {
-    if (_isLoadingHistory) return;
-    setState(() => _isLoadingHistory = true);
-
-    try {
-      final items = await _warehouseApi.getStockHistory();
-      setState(() => _history = items);
-    } catch (e) {
-      _showError('Không tải được lịch sử nhập/xuất: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingHistory = false);
-    }
-  }
-
   void _handleSearch(String value) {
     setState(() {
-      if (value.isEmpty) {
+      if (value.trim().isEmpty) {
         _filteredProducts = List.from(_products);
       } else {
-        _filteredProducts = _products
-            .where(
-              (p) =>
-                  p.name.toLowerCase().contains(value.toLowerCase()) ||
-                  p.id.toLowerCase().contains(value.toLowerCase()),
-            )
-            .toList();
+        final q = value.toLowerCase();
+        _filteredProducts = _products.where((item) {
+          final name = item.name.toLowerCase();
+          final code = item.productCode.toLowerCase();
+          return name.contains(q) || code.contains(q);
+        }).toList();
       }
     });
   }
 
-  // Tính toán thống kê
-  int get _totalStock => _products.fold(0, (sum, item) => sum + item.quantity);
+  // ✅ Kho tính theo STOCK
+  int get _totalStock => _products.fold(0, (sum, item) => sum + item.stock);
+
   double get _totalValue =>
-      _products.fold(0, (sum, item) => sum + (item.quantity * item.price));
-  int get _lowStockCount =>
-      _products.where((item) => item.quantity < 10).length;
+      _products.fold(0, (sum, item) => sum + (item.stock * item.price));
+
+  int get _lowStockCount => _products.where((item) => item.stock < 10).length;
 
   @override
   Widget build(BuildContext context) {
@@ -96,126 +81,102 @@ class _WarehouseScreenState extends State<WarehouseScreen>
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          // 1. THẺ THỐNG KÊ (STATS)
+          // 1) THỐNG KÊ
           Row(
             children: [
-              WarehouseStatCard(
-                title: "TỔNG TỒN KHO",
-                value: "$_totalStock sản phẩm",
-                icon: Icons.inventory_2,
-                color: Colors.blue,
-                bgColor: Colors.blue.shade50,
+              Expanded(
+                child: WarehouseStatCard(
+                  title: "Tổng tồn kho",
+                  value: _totalStock.toString(),
+                  icon: Icons.inventory_2_outlined,
+                  color: Colors.blue,
+                  bgColor: Colors.blue.withOpacity(0.12),
+                ),
               ),
               const SizedBox(width: 20),
-              WarehouseStatCard(
-                title: "GIÁ TRỊ KHO",
-                value:
-                    "${(_totalValue / 1000000000).toStringAsFixed(2)} Tỷ VNĐ",
-                icon: Icons.monetization_on,
-                color: Colors.green,
-                bgColor: Colors.green.shade50,
+              Expanded(
+                child: WarehouseStatCard(
+                  title: "Tổng giá trị kho",
+                  value: _formatCurrency(_totalValue),
+                  icon: Icons.attach_money,
+                  color: Colors.green,
+                  bgColor: Colors.green.withOpacity(0.12),
+                ),
               ),
               const SizedBox(width: 20),
-              WarehouseStatCard(
-                title: "SẮP HẾT HÀNG (<10)",
-                value: "$_lowStockCount mặt hàng",
-                icon: Icons.warning_amber_rounded,
-                color: Colors.red,
-                bgColor: Colors.red.shade50,
+              Expanded(
+                child: WarehouseStatCard(
+                  title: "Sắp hết hàng",
+                  value: _lowStockCount.toString(),
+                  icon: Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  bgColor: Colors.orange.withOpacity(0.12),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
 
-          // 2. THANH CÔNG CỤ & TAB
+          const SizedBox(height: 15),
+
+          // 2) HEADER + SEARCH
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10),
+              ],
             ),
             child: Row(
               children: [
-                // Tab Selector
-                Container(
-                  width: 300,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    indicator: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.black54,
-                    tabs: const [
-                      Tab(text: "Danh sách Tồn kho"),
-                      Tab(text: "Lịch sử Nhập/Xuất"),
-                    ],
-                  ),
+                const Text(
+                  "Danh sách Tồn kho",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-
-                // Ô tìm kiếm
                 SizedBox(
                   width: 300,
                   height: 40,
                   child: TextField(
                     controller: _searchCtrl,
                     onChanged: _handleSearch,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: "Tìm kiếm sản phẩm...",
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                      filled: true,
-                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: () {
-                    _loadInventory();
-                    _loadHistory();
-                  },
-                  icon: const Icon(Icons.print, color: Colors.grey),
-                  tooltip: "In báo cáo",
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.file_download, color: Colors.green),
-                  tooltip: "Xuất Excel",
                 ),
               ],
             ),
           ),
+
           const SizedBox(height: 15),
 
-          // 3. NỘI DUNG TAB (TABLES)
+          // 3) BẢNG TỒN KHO
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Tab 1: Bảng tồn kho
-                _isLoadingInventory
-                    ? const Center(child: CircularProgressIndicator())
-                    : InventoryTable(products: _filteredProducts),
-
-                // Tab 2: Lịch sử
-                _isLoadingHistory
-                    ? const Center(child: CircularProgressIndicator())
-                    : StockHistory(history: _history),
-              ],
-            ),
+            child: _isLoadingInventory
+                ? const Center(child: CircularProgressIndicator())
+                : InventoryTable(products: _filteredProducts),
           ),
         ],
       ),
     );
+  }
+
+  String _formatCurrency(double amount) {
+    final s = amount.toStringAsFixed(0);
+    final withDots = s.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    return "$withDots đ";
   }
 
   void _showError(String msg) {

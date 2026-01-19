@@ -3,9 +3,8 @@ import '../constants.dart';
 import '../components/sidebar_menu.dart';
 import '../components/top_header.dart';
 
-// Import màn hình chức năng
 import 'product_manager_screen.dart';
-// ĐÃ XÓA IMPORT MÀN HÌNH NHẬP HÀNG
+import './import_goods/import_goods_screen.dart';
 import './export_goods/export_goods_screen.dart';
 import './employee/employee_manager_screen.dart';
 import './revenue/components/revenue_screen.dart';
@@ -28,30 +27,31 @@ class TechStoreScreen extends StatefulWidget {
 class _TechStoreScreenState extends State<TechStoreScreen> {
   int _currentMenuIndex = 0;
 
+  bool get _isAdmin => widget.userRole == 'admin';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
         children: [
-          // SIDEBAR
           SidebarMenu(
             userRole: widget.userRole,
             selectedIndex: _currentMenuIndex,
             onItemSelected: (index) {
+              // ✅ staff không được vào Nhập hàng + menu admin
+              if (!_isAdmin && (index == 1 || index == 3 || index == 4)) return;
+
               setState(() => _currentMenuIndex = index);
             },
           ),
 
-          // MAIN CONTENT
           Expanded(
             child: Column(
               children: [
                 TopHeader(
                   employeeName: widget.userName,
-                  role: widget.userRole == 'admin'
-                      ? "Quản trị viên"
-                      : "Nhân viên",
+                  role: _isAdmin ? "Quản trị viên" : "Nhân viên",
                 ),
                 Expanded(child: _buildBody()),
               ],
@@ -62,24 +62,29 @@ class _TechStoreScreenState extends State<TechStoreScreen> {
     );
   }
 
-  // Hàm điều hướng (Đã cập nhật lại Index)
   Widget _buildBody() {
     switch (_currentMenuIndex) {
       case 0:
         return ProductManagerScreen(userRole: widget.userRole);
 
-      // Case 1 cũ là Nhập hàng -> Đã xóa
+      case 1:
+        if (_isAdmin) return const ImportGoodsScreen();
+        return const Center(
+          child: Text("Bạn không có quyền truy cập Nhập hàng"),
+        );
 
-      case 1: // Cũ là 2
+      case 2:
         return const ExportGoodsScreen();
 
-      case 2: // Cũ là 3
-        return const EmployeeManagerScreen();
+      case 3:
+        if (_isAdmin) return const EmployeeManagerScreen();
+        return const Center(child: Text("Bạn không có quyền truy cập mục này"));
 
-      case 3: // Cũ là 4
-        return const RevenueScreen();
+      case 4:
+        if (_isAdmin) return const RevenueScreen();
+        return const Center(child: Text("Bạn không có quyền truy cập mục này"));
 
-      case 4: // Cũ là 5
+      case 5:
         return const WarehouseScreen();
 
       default:

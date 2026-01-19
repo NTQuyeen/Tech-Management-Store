@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../constants.dart'; // Để lấy màu AppColors.primary
+import '../constants.dart';
 
 class ProductForm extends StatelessWidget {
   final TextEditingController nameCtrl;
@@ -7,10 +7,17 @@ class ProductForm extends StatelessWidget {
   final TextEditingController priceCtrl;
   final TextEditingController qtyCtrl;
 
-  // PHẦN DROPDOWN
+  // dropdown
   final List<String> categoryList;
   final String? selectedCategory;
   final ValueChanged<String?> onCategoryChanged;
+
+  // ✅ search trong ô Mã SP
+  final bool enableCodeSearch;
+  final VoidCallback? onSearchCode;
+
+  // ✅ khóa tên + loại khi đã auto-fill từ kho
+  final bool lockNameAndCategory;
 
   const ProductForm({
     super.key,
@@ -21,6 +28,9 @@ class ProductForm extends StatelessWidget {
     required this.categoryList,
     required this.selectedCategory,
     required this.onCategoryChanged,
+    this.enableCodeSearch = false,
+    this.onSearchCode,
+    this.lockNameAndCategory = false,
   });
 
   @override
@@ -32,11 +42,29 @@ class ProductForm extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              flex: 3, // Tên SP dài hơn chút
-              child: _buildRow("Tên sản phẩm", controller: nameCtrl),
+              flex: 3,
+              child: _buildRow(
+                "Tên sản phẩm",
+                controller: nameCtrl,
+                readOnly: lockNameAndCategory, // ✅ auto fill -> khóa
+              ),
             ),
             const SizedBox(width: 20),
-            Expanded(flex: 2, child: _buildRow("Mã SP", controller: idCtrl)),
+            Expanded(
+              flex: 2,
+              child: _buildRow(
+                "Mã SP",
+                controller: idCtrl,
+                // ✅ gắn nút tìm kiếm trong input mã
+                suffixIcon: enableCodeSearch
+                    ? IconButton(
+                        tooltip: "Tìm trong kho",
+                        icon: const Icon(Icons.search),
+                        onPressed: onSearchCode,
+                      )
+                    : null,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 15),
@@ -44,30 +72,36 @@ class ProductForm extends StatelessWidget {
         // --- HÀNG 2: Loại sản phẩm & Số lượng ---
         Row(
           children: [
-            // Dropdown Loại sản phẩm
             Expanded(
               flex: 3,
               child: _buildRow(
                 "Loại sản phẩm",
-                customWidget: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: selectedCategory,
-                      isExpanded: true,
-                      hint: const Text("Chọn loại"),
-                      items: categoryList.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: onCategoryChanged,
+                customWidget: AbsorbPointer(
+                  absorbing:
+                      lockNameAndCategory, // ✅ khóa dropdown khi auto fill
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4),
+                      color: lockNameAndCategory
+                          ? Colors.grey.shade100
+                          : Colors.white,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedCategory,
+                        isExpanded: true,
+                        hint: const Text("Chọn loại"),
+                        items: categoryList.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: onCategoryChanged,
+                      ),
                     ),
                   ),
                 ),
@@ -82,7 +116,7 @@ class ProductForm extends StatelessWidget {
         ),
         const SizedBox(height: 15),
 
-        // --- HÀNG 3: Đơn giá & (Ô trống để cân đối) ---
+        // --- HÀNG 3: Đơn giá ---
         Row(
           children: [
             Expanded(
@@ -94,7 +128,6 @@ class ProductForm extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 20),
-            // Spacer trống bên phải để giữ form thẳng hàng với flex ở trên
             const Expanded(flex: 2, child: SizedBox()),
           ],
         ),
@@ -102,25 +135,23 @@ class ProductForm extends StatelessWidget {
     );
   }
 
-  // --- HÀM TẠO DÒNG NHẬP LIỆU (Label Trái - Input Phải) ---
   Widget _buildRow(
     String label, {
     TextEditingController? controller,
     bool isNumber = false,
     Widget? customWidget,
+    Widget? suffixIcon,
+    bool readOnly = false,
   }) {
     return Row(
       children: [
-        // 1. PHẦN LABEL (MÀU XANH BÊN TRÁI)
         Container(
-          width: 110, // Độ rộng cố định cho Label để thẳng hàng
-          height: 40, // Chiều cao cố định
+          width: 110,
+          height: 40,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: const Color(
-              0xFF00695C,
-            ), // Màu xanh đậm giống hình mẫu (Teal)
+            color: const Color(0xFF00695C),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
@@ -133,32 +164,31 @@ class ProductForm extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-
-        // 2. PHẦN INPUT (MÀU TRẮNG BÊN PHẢI)
         Expanded(
           child:
               customWidget ??
               SizedBox(
-                // Nếu có widget riêng (Dropdown) thì dùng, ko thì dùng TextField
-                height: 40, // Chiều cao khớp với label
+                height: 40,
                 child: TextField(
                   controller: controller,
+                  readOnly: readOnly,
                   keyboardType: isNumber
                       ? TextInputType.number
                       : TextInputType.text,
                   style: const TextStyle(fontSize: 14),
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 0,
                     ),
-                    border: OutlineInputBorder(), // Viền xám
-                    focusedBorder: OutlineInputBorder(
+                    border: const OutlineInputBorder(),
+                    focusedBorder: const OutlineInputBorder(
                       borderSide: BorderSide(
                         color: AppColors.primary,
                         width: 2,
                       ),
                     ),
+                    suffixIcon: suffixIcon, // ✅ icon search ở đây
                   ),
                 ),
               ),

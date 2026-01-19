@@ -1,0 +1,18 @@
+========== PHIEU NHAP HANG ==========
+Ma phieu: PN1768274038610
+Ngay nhap: 13/01/2026
+Trang thai thanh toan: Đã thanh toán
+Tao luc: 13/01/2026 10:15:02
+
+--- NHA CUNG CAP ---
+Ten: Công ty TNHH An Phát
+SDT: 0901234567
+Email: contact@anphat.vn
+Dia chi: Hà Nội
+
+--- CHI TIET HANG NHAP ---
+STT | MaSP | TenSP | SL | GiaNhap | ThanhTien
+1 | P3 | MacBook Air M2 (8GB/256GB) | 1 | 15.000.000 đ | 15.000.000 đ
+
+TONG TIEN NHAP: 15.000.000 đ
+========== END ==========
